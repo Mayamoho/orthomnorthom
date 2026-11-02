@@ -40,7 +40,7 @@ def detect_language(text: str) -> str:
         "amar", "apnar", "apnader", "koto", "kibhabe", "kivabe", "ki", "kon",
         "koren", "korbo", "hobe", "ache", "ase", "hoy", "hoye", "jabe", "jabo",
         "chai", "lagbe", "pabo", "paben", "niye", "theke", "er", "e", "jonno",
-        "account", "card", "loan", "fee", "transfer", "pin", "branch", "kora",
+        "kora",
     }
     marker_hits = sum(1 for token in words if token in banglish_markers)
     return "banglish" if marker_hits >= 2 or (marker_hits == 1 and len(words) <= 8) else "en"
