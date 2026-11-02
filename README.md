@@ -6,6 +6,7 @@ NB Assist is a local-first FAQ assistant for the BIAI AI Engineer Round 2 Task 2
 
 - Hybrid FAQ retrieval with character and word overlap, plus an optional multilingual embedding model.
 - Conservative support gate: low-confidence questions are refused instead of guessed.
+- When the local generator is available, a second strict entailment check must approve the retrieved FAQ before generation.
 - Local Qwen3-1.7B generation when the model dependencies and weights are available.
 - Deterministic fallback mode for UI and retrieval smoke tests.
 - Key-fact validation preserves amounts, percentages, dates, and hotline numbers.
