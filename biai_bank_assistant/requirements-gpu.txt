@@ -1,0 +1,2 @@
+-r requirements-kaggle.txt
+bitsandbytes>=0.43
