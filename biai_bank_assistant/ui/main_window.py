@@ -5,7 +5,7 @@ from html import escape
 from PySide6.QtCore import QObject, Qt, QThread, Signal, Slot
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
-    QFrame, QHBoxLayout, QLabel, QMainWindow, QPushButton, QSizePolicy,
+    QFrame, QGraphicsDropShadowEffect, QHBoxLayout, QLabel, QMainWindow, QPushButton, QSizePolicy,
     QTextEdit, QVBoxLayout, QWidget,
 )
 
@@ -37,6 +37,14 @@ class MainWindow(QMainWindow):
         self.setStyleSheet(APP_QSS)
         self._build()
 
+    @staticmethod
+    def _neo_shadow(widget: QWidget, offset: int = 7):
+        shadow = QGraphicsDropShadowEffect(widget)
+        shadow.setBlurRadius(0)
+        shadow.setOffset(offset, offset)
+        shadow.setColor(Qt.black)
+        widget.setGraphicsEffect(shadow)
+
     def _build(self):
         root = QWidget()
         self.setCentralWidget(root)
@@ -57,6 +65,7 @@ class MainWindow(QMainWindow):
     def _sidebar(self):
         panel = QFrame(objectName="sidebar")
         panel.setFixedWidth(218)
+        self._neo_shadow(panel, 7)
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(16, 18, 16, 16)
         layout.setSpacing(9)
@@ -93,6 +102,7 @@ class MainWindow(QMainWindow):
 
     def _hero(self):
         card = QFrame(objectName="heroCard")
+        self._neo_shadow(card, 7)
         layout = QVBoxLayout(card)
         layout.setContentsMargins(24, 20, 24, 20)
         eyebrow = QLabel("NIRBHOR BANK PLC  /  NB GO", objectName="eyebrow")
@@ -110,6 +120,7 @@ class MainWindow(QMainWindow):
 
     def _chat_card(self):
         self.chat_card = QFrame(objectName="chatCard")
+        self._neo_shadow(self.chat_card, 7)
         layout = QVBoxLayout(self.chat_card)
         layout.setContentsMargins(18, 14, 18, 14)
         label = QLabel("Conversation", objectName="eyebrow")
@@ -123,6 +134,7 @@ class MainWindow(QMainWindow):
 
     def _composer_card(self):
         card = QFrame(objectName="composerCard")
+        self._neo_shadow(card, 7)
         layout = QVBoxLayout(card)
         layout.setContentsMargins(14, 12, 14, 12)
         chips = QHBoxLayout()
@@ -147,6 +159,7 @@ class MainWindow(QMainWindow):
     def _inspector(self):
         panel = QFrame(objectName="inspector")
         panel.setFixedWidth(242)
+        self._neo_shadow(panel, 7)
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(16, 18, 16, 16)
         layout.setSpacing(12)
@@ -169,7 +182,7 @@ class MainWindow(QMainWindow):
 
     @staticmethod
     def _welcome_html() -> str:
-        return '<div style="color:#a6f36b;font-weight:700">NB Assist</div><div style="color:#b9c5d9;margin-top:6px">Hello. Ask me about Nirbhor Bank products and services. I answer only from the supplied FAQ.</div>'
+        return '<div style="color:#101010;font-weight:900">NB ASSIST / READY</div><div style="color:#252525;margin-top:6px">Hello. Ask me about Nirbhor Bank products and services. I answer only from the supplied FAQ.</div>'
 
     def _set_question(self, text: str):
         self.composer.setPlainText(text)
@@ -195,7 +208,7 @@ class MainWindow(QMainWindow):
 
     @Slot(object)
     def _received(self, result):
-        color = "#a6f36b" if result.status == "answered" else "#ffcf87"
+        color = "#101010" if result.status == "answered" else "#a23a20"
         self.chat_view.append(f'<div style="color:{color};margin-top:16px"><b>NB Assist</b><br>{escape(result.answer)}</div>')
         self.language_value.setText(result.language.title())
         self.source_value.setText(f"FAQ {result.source_id}" if result.source_id else "Handoff")
