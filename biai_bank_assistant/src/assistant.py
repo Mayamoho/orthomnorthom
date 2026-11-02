@@ -26,6 +26,14 @@ class BankAssistant:
                 latency_ms=(time.perf_counter() - started) * 1000, hits=hits,
             )
 
+        model_support = self.generator.supports(question, best.entry)
+        if model_support is False:
+            return AssistantResult(
+                answer=refusal(language), language=language, status="handoff", support_type="unsupported",
+                source_id=None, confidence=best.score,
+                latency_ms=(time.perf_counter() - started) * 1000, hits=hits,
+            )
+
         answer = self.generator.answer(question, best.entry, language)
         if not preserves_key_facts(best.entry.answer, answer):
             answer = self.generator._fallback(best.entry, language)

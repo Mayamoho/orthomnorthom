@@ -73,6 +73,30 @@ class LocalGenerator:
         answer = self.tokenizer.decode(outputs[0][inputs.input_ids.shape[-1] :], skip_special_tokens=True).strip()
         return answer or self._fallback(entry, language)
 
+    def supports(self, question: str, entry: FAQEntry) -> bool | None:
+        """Ask the local model for a conservative FAQ entailment decision."""
+        self.load()
+        if not self.available:
+            return None
+        prompt = (
+            "You are a strict FAQ support checker. Return only YES or NO. "
+            "Return YES when the FAQ answer directly answers the customer question "
+            "or safely covers a harmless specific case such as a spouse asking about a two-holder joint account. "
+            "Return NO when the question asks for a new policy, a personal data lookup, a location-specific fact, "
+            "or contradicts the FAQ.\n\n"
+            f"FAQ question: {entry.question}\nFAQ answer: {entry.answer}\nCustomer question: {question}\nDecision:"
+        )
+        messages = [{"role": "user", "content": prompt}]
+        text = self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True, enable_thinking=False)
+        inputs = self.tokenizer([text], return_tensors="pt").to(self.model.device)
+        outputs = self.model.generate(**inputs, max_new_tokens=4, do_sample=False)
+        decision = self.tokenizer.decode(outputs[0][inputs.input_ids.shape[-1] :], skip_special_tokens=True).strip().upper()
+        if decision.startswith("YES"):
+            return True
+        if decision.startswith("NO"):
+            return False
+        return None
+
     @staticmethod
     def _fallback(entry: FAQEntry, language: str) -> str:
         if entry.faq_id == 14 and language == "bn":
