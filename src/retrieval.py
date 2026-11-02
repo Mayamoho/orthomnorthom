@@ -66,7 +66,8 @@ class FAQRetriever:
 
 
 def extract_numbers(text: str) -> set[str]:
-    return set(re.findall(r"\d+(?:\.\d+)?", text or ""))
+    normalized = (text or "").translate(str.maketrans("০১২৩৪৫৬৭৮৯", "0123456789"))
+    return set(re.findall(r"\d+(?:\.\d+)?", normalized))
 
 
 def preserves_key_facts(source: str, answer: str) -> bool:
