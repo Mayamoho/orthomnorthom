@@ -190,3 +190,14 @@ def detect_language(text: str) -> str:
 
 def language_name(code: str) -> str:
     return {"en": "English", "bn": "Bangla", "banglish": "Banglish", "mixed": "mixed"}.get(code, code)
+
+
+def answer_matches_language(text: str, expected: str) -> bool:
+    """Check the output script/register without judging its factual content."""
+    if expected == "en":
+        return not BENGALI_RE.search(text or "")
+    if expected == "bn":
+        return bool(BENGALI_RE.search(text or ""))
+    if expected == "banglish":
+        return detect_language(text or "") == "banglish"
+    return True

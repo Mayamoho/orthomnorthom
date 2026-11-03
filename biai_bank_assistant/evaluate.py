@@ -22,6 +22,9 @@ EXPECTED_SOURCE = {
 
 def main() -> int:
     assistant = BankAssistant(load_faq(ROOT / "data" / "bank-faq.csv"))
+    # LocalGenerator loads lazily. Load it before recording the report status so
+    # generator_loaded reflects the actual model-stack run.
+    assistant.generator.load()
     mode = assistant.retriever.mode
     model_loaded = assistant.generator.available
     print(f"retrieval mode: {mode} | generator: {'loaded' if model_loaded else 'not loaded (deterministic fallback)'}")

@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 
 from .models import FAQEntry
+from .normalize import answer_matches_language, language_name
 
 
 REFUSALS = {
@@ -71,10 +72,24 @@ class LocalGenerator:
         if not self.available:
             return self._fallback(entry, language)
 
+        if language == "bn":
+            language_instruction = (
+                "Write entirely in Bangla using Bengali script. Do not write English sentences. "
+                "Keep bank and product names, numbers, dates, and hotline digits unchanged."
+            )
+        elif language == "banglish":
+            language_instruction = (
+                "Write in Banglish: Bengali language written with Latin/English letters. "
+                "Do not answer in standard English. Keep bank and product names, numbers, "
+                "dates, and hotline digits unchanged."
+            )
+        else:
+            language_instruction = "Write entirely in English."
+
         prompt = (
             "You are Nirbhor Bank's offline FAQ assistant. Use only the FAQ answer below. "
             "Do not add facts. Preserve every number, date, fee, percentage, product name, and hotline. "
-            f"Reply in {language}. Keep the answer to two short sentences.\n\n"
+            f"{language_instruction} Keep the answer to two short sentences.\n\n"
             f"FAQ question: {entry.question}\nFAQ answer: {entry.answer}\nCustomer question: {question}\nAnswer:"
         )
         messages = [{"role": "user", "content": prompt}]
@@ -82,7 +97,26 @@ class LocalGenerator:
         inputs = self.tokenizer([text], return_tensors="pt").to(self.model.device)
         outputs = self.model.generate(**inputs, max_new_tokens=96, do_sample=False)
         answer = self.tokenizer.decode(outputs[0][inputs.input_ids.shape[-1] :], skip_special_tokens=True).strip()
-        return answer or self._fallback(entry, language)
+        if answer and answer_matches_language(answer, language):
+            return answer
+
+        # Qwen can follow the facts while missing the requested register. Give
+        # it one stricter retry before the assistant applies its hard guard.
+        strict_prompt = (
+            prompt
+            + "\nThis is a strict format check. An answer in the wrong language is invalid. "
+            + f"The required language is {language_name(language)}. Output only that language."
+        )
+        strict_messages = [{"role": "user", "content": strict_prompt}]
+        strict_text = self.tokenizer.apply_chat_template(
+            strict_messages, tokenize=False, add_generation_prompt=True, enable_thinking=False
+        )
+        strict_inputs = self.tokenizer([strict_text], return_tensors="pt").to(self.model.device)
+        strict_outputs = self.model.generate(**strict_inputs, max_new_tokens=96, do_sample=False)
+        strict_answer = self.tokenizer.decode(
+            strict_outputs[0][strict_inputs.input_ids.shape[-1] :], skip_special_tokens=True
+        ).strip()
+        return strict_answer or answer or self._fallback(entry, language)
 
     def supports(self, question: str, entry: FAQEntry) -> bool | None:
         """Ask the local model for a conservative FAQ entailment decision."""

@@ -5,7 +5,7 @@ import time
 
 from .generator import LocalGenerator, refusal
 from .models import AssistantResult, FAQEntry, RetrievalHit
-from .normalize import BENGALI_RE, detect_language, query_representations, tokenize
+from .normalize import BENGALI_RE, answer_matches_language, detect_language, query_representations, tokenize
 from .retrieval import FAQRetriever, extract_numbers, preserves_key_facts
 
 # Concepts a customer might ask about that have zero presence in the supplied
@@ -74,6 +74,8 @@ class BankAssistant:
             return self._handoff(language, best.score, started, hits, "faq_entailment_rejected")
 
         answer = self.generator.answer(question, best.entry, language)
+        if self.generator.available and not answer_matches_language(answer, language):
+            return self._handoff(language, best.score, started, hits, "language_generation_failed")
         grounded = preserves_key_facts(best.entry.answer, answer)
         if not grounded:
             answer = self.generator._fallback(best.entry, language)
