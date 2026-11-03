@@ -44,9 +44,14 @@ The test questions remain evaluation-only. `reports/offline_results.json` record
 
 ## Kaggle
 
-Use a GPU notebook for Qwen3 1.7B with 4-bit loading. Install `requirements-kaggle.txt`, copy the `data/` and `src/` directories, run `python kaggle_demo.py`, and save the generated report. A persistent public server is intentionally not required; the notebook is the reproducible demo. Run `python main.py` locally for the PySide6 desktop interface.
+`notebooks/kaggle_demo.ipynb` is the reproducible demo and the path that produces the model-stack numbers. A persistent public server is intentionally not required.
 
-`notebooks/kaggle_demo.ipynb` is the full Kaggle path: it installs the dependencies, copies the project out of the read-only `/kaggle/input` mount, asserts that both models actually loaded, demos all three languages, runs the 40-question evaluation, then does the two extras — the optional LoRA fine-tune and the mandatory online-model comparison.
+1. Upload the **contents** of this folder — not the folder itself — as a Kaggle dataset named `biai-bank-assistant`. The notebook reads `/kaggle/input/biai-bank-assistant/src`, `/data`, and `/requirements-kaggle.txt`, so `src/`, `data/`, `evaluate.py` and `requirements-kaggle.txt` must sit at the top level of the dataset. The notebook asserts this in section 2 rather than failing later.
+2. Open the notebook (`File → New Notebook → Import from local file`, or create a notebook and paste the sections), attach that dataset, and switch the accelerator to **GPU T4** with internet **on** (the weights come from Hugging Face on first run).
+3. Run all cells. Section 5 copies the project into `/kaggle/working` before evaluating, because `/kaggle/input` is read-only and `evaluate.py` writes its report there.
+4. Section 6 is the brief's *optional* extra (further training on public banking vocabulary). Section 7 is the *required* comparison against an online model and needs a `GEMINI_API_KEY` secret.
+
+Locally, `python kaggle_demo.py` still runs the headless evaluation, and `python main.py` opens the desktop interface.
 
 ## Data rule
 
