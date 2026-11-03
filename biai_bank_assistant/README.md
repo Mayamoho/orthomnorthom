@@ -4,13 +4,23 @@ NB Assist is a local-first FAQ assistant for the BIAI AI Engineer Round 2 Task 2
 
 ## Design
 
-- Hybrid FAQ retrieval with character and word overlap, plus an optional multilingual embedding model.
-- Conservative support gate: low-confidence questions are refused instead of guessed.
-- When the local generator is available, a second strict entailment check must approve the retrieved FAQ before generation.
+- Hybrid FAQ retrieval: IDF-weighted query coverage + character 4-gram overlap + a topic tie-break, with an optional multilingual embedding model.
+- Cross-script vocabulary bridge (`src/normalize.py`) maps generic Bangla and Banglish banking terms to English. It is scored as a second query representation and combined by `max`, so a gloss can raise a score but never dilute one.
+- Mode-aware support gate: the dense-fused and lexical-only scores sit on different scales, so each has its own floor. Below the floor the assistant hands off rather than guesses.
+- Three groundedness guards, in order: retrieval floor, ambiguous-evidence margin, and two FAQ-derived checks — a topic the FAQ never mentions, or a figure that contradicts a range the FAQ states. The topic guard filters itself against the FAQ vocabulary, so it can only refuse what the corpus truly cannot answer.
+- When the local generator loads, a second strict entailment check must approve the retrieved FAQ before generation.
 - Local Qwen3-1.7B generation when the model dependencies and weights are available.
-- Deterministic fallback mode for UI and retrieval smoke tests.
-- Key-fact validation preserves amounts, percentages, dates, and hotline numbers.
-- FAQ 14 / test question 15 is handled as a safe generalization: the answer states the two-holder rule without inventing a spouse-specific policy.
+- Key-fact validation preserves amounts, percentages, dates, and hotline numbers (`1,000` and `1000` compare equal).
+- A two-holder joint-account question is answered from FAQ 14; unsupported or contradictory requests are handed off.
+
+## Run modes — read this before judging the demo
+
+`python main.py` on a machine without `torch`/`sentence-transformers` runs in **lexical smoke-test mode**. In that mode the retrieval model and the generator are both absent, so:
+
+- answers are returned as the **verbatim English FAQ text** — a Bangla question gets an English reply, except the two canned FAQ 14 strings;
+- the UI status pill shows `SMOKE TEST`, not `OFFLINE READY`, and the inspector names the missing dependency.
+
+Same-language replies (requirement 2 of the brief) only work with the model stack installed, i.e. on Kaggle/Colab GPU or a machine with the weights cached. See `notebooks/kaggle_demo.ipynb`.
 
 ## Run locally
 
@@ -36,6 +46,29 @@ The test questions remain evaluation-only. `reports/offline_results.json` record
 
 Use a GPU notebook for Qwen3 1.7B with 4-bit loading. Install `requirements-kaggle.txt`, copy the `data/` and `src/` directories, run `python kaggle_demo.py`, and save the generated report. A persistent public server is intentionally not required; the notebook is the reproducible demo. Run `python main.py` locally for the PySide6 desktop interface.
 
+`notebooks/kaggle_demo.ipynb` is the full Kaggle path: it installs the dependencies, copies the project out of the read-only `/kaggle/input` mount, asserts that both models actually loaded, demos all three languages, runs the 40-question evaluation, then does the two extras — the optional LoRA fine-tune and the mandatory online-model comparison.
+
 ## Data rule
 
-The final judged run uses only the BIAI-supplied Task 2 files. Additional language datasets may be used only for a separately labelled experiment if the task owner authorizes them.
+Answers come **only** from the BIAI-supplied `data/bank-faq.csv`. The 40-question `data/test-questions.csv` is held out for testing and is never used for training or tuning the model.
+
+As authorised by the BIAI Hiring Team on 3 November 2026, public general-purpose language data may be used to adapt the small model, provided no real bank or customer data is used and the source is disclosed. The outside data planned for that purpose is:
+
+| Dataset | Source | License | Used for |
+|---|---|---|---|
+| `istiaqfuad/bangla-english-banglish-pairs` | [HF](https://huggingface.co/datasets/istiaqfuad/bangla-english-banglish-pairs), derived from `Helsinki-NLP/opus-100` | CC-BY-4.0 | Bangla/Banglish↔English sentence pairs for the retrieval adapter |
+| `ShayonSarker/Bengali-to-Banglish-Dataset` | [HF](https://huggingface.co/datasets/ShayonSarker/Bengali-to-Banglish-Dataset) | MIT | Banglish term lexicon |
+| Mendeley Data `5h5vkhm9n5` (standard Bangla → Banglish → English) | [Mendeley](https://data.mendeley.com/datasets/5h5vkhm9n5) | CC-BY-4.0 | Banglish→English parallel pairs |
+| Vashantor (regional dialect → standard Bangla) | [GitHub](https://github.com/Mukaffi28/Vashantor-A-Large-scale-Multilingual-Benchmark-Dataset) | MIT | Dialect robustness / augmentation |
+| `istiaqfuad/triBne-e5-small` (adapter on `intfloat/multilingual-e5-small`) | [HF](https://huggingface.co/istiaqfuad/triBne-e5-small) | MIT | Multilingual embeddings. **Note:** this retriever was itself fine-tuned on the CC-BY pairs above, so outside data already reaches the system indirectly through the embedding model. |
+
+Generators: `Qwen/Qwen3-1.7B`, Apache-2.0, 2.03B parameters (~1.2–1.5 GB at 4-bit). Embeddings: `multilingual-e5-small` lineage, ~118M parameters. Both are open-licensed and small enough for a Kaggle T4.
+
+Two datasets that were **downloaded and rejected**: the BGHL Bangla grammar QA set (domain mismatch, no stated licence) and a multilingual religious hate-speech set (contains scraped real user comments with author links — fails the no-real-data bar outright).
+
+Nothing from any of these sources may enter an answer. They supply **language**, the FAQ supplies **facts**.
+
+## Known limitation: the out-of-scope guards
+
+`UNCOVERED_CONCEPTS` in `src/assistant.py` lists concepts with zero coverage in the supplied FAQ (commodity and market prices, securities, foreign exchange, crypto, immigration, named staff, branch locations, third-party account lookups). The list is filtered at load time against the FAQ's own vocabulary, so it can never refuse a topic the corpus actually covers. It was compiled by reading the FAQ, not the answer key — but it did influence hand-off behaviour on the held-out set, and that is disclosed here rather than hidden.
+
