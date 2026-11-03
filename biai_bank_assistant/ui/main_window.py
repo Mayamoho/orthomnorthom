@@ -36,6 +36,24 @@ class MainWindow(QMainWindow):
         self.resize(1400, 860)
         self.setStyleSheet(APP_QSS)
         self._build()
+        self._set_mode_status()
+
+    def _set_mode_status(self):
+        """Say honestly which stack is live instead of always claiming ready."""
+        retriever, generator = self.assistant.retriever, self.assistant.generator
+        if generator.available and retriever.dense_available:
+            self.status_pill.setText("●  MODEL READY")
+            self.mode_value.setText("Dense + local model")
+            return
+        self.status_pill.setText("●  SMOKE TEST")
+        reasons = []
+        if not retriever.dense_available:
+            reasons.append("embedding model absent")
+        if not generator.available:
+            reasons.append("generator absent")
+        self.mode_value.setText("Lexical only — " + ", ".join(reasons))
+        detail = generator.load_error or "Install requirements-kaggle.txt on a GPU host to enable Bangla and Banglish replies."
+        self.grounding.setText(f"Smoke-test mode ({detail}) Answers are returned as the verbatim FAQ text, so a Bangla question receives an English reply.")
 
     @staticmethod
     def _neo_shadow(widget: QWidget, offset: int = 7):
@@ -97,6 +115,7 @@ class MainWindow(QMainWindow):
         row.addWidget(title)
         row.addStretch()
         pill = QLabel("●  OFFLINE READY", objectName="statusPill")
+        self.status_pill = pill
         row.addWidget(pill)
         return container
 
@@ -167,7 +186,9 @@ class MainWindow(QMainWindow):
         self.language_value = QLabel("—", objectName="metricValue")
         self.source_value = QLabel("—", objectName="metricValue")
         self.latency_value = QLabel("—", objectName="metricValue")
-        for label, value, key in (("Detected language", self.language_value, "Language"), ("FAQ source", self.source_value, "Source"), ("Response time", self.latency_value, "Latency")):
+        self.mode_value = QLabel("—", objectName="metricValue")
+        self.mode_value.setWordWrap(True)
+        for label, value, key in (("Detected language", self.language_value, "Language"), ("FAQ source", self.source_value, "Source"), ("Response time", self.latency_value, "Latency"), ("Runtime mode", self.mode_value, "Mode")):
             block = QVBoxLayout()
             block.addWidget(QLabel(key, objectName="metricLabel"))
             block.addWidget(value)
@@ -214,9 +235,19 @@ class MainWindow(QMainWindow):
         self.source_value.setText(f"FAQ {result.source_id}" if result.source_id else "Handoff")
         self.latency_value.setText(f"{result.latency_ms:.0f} ms")
         if result.status == "answered":
-            self.grounding.setText(f"Grounded in FAQ {result.source_id}. Support type: {result.support_type.replace('_', ' ')}.")
+            note = ""
+            if result.metadata.get("answer_form") == "faq_verbatim" and result.language != "en":
+                note = " Replied in the FAQ's original English because no local model is loaded."
+            self.grounding.setText(f"Grounded in FAQ {result.source_id}. Support type: {result.support_type.replace('_', ' ')}.{note}")
         else:
-            self.grounding.setText("No supported FAQ evidence was strong enough. The assistant offered a human handoff.")
+            reasons = {
+                "below_threshold": "No FAQ match was strong enough.",
+                "ambiguous_evidence": "Two FAQs tied, so the assistant did not guess.",
+                "topic_not_in_faq": "The question is about a topic the FAQ does not cover.",
+                "figure_not_in_faq": "The question cites a figure the FAQ never states.",
+                "faq_entailment_rejected": "The local model rejected the retrieved FAQ.",
+            }
+            self.grounding.setText(reasons.get(result.support_type, "No supported FAQ evidence.") + " Human handoff offered.")
 
     def _thread_done(self):
         self.thread = None
