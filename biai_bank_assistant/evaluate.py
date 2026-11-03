@@ -8,6 +8,7 @@ from pathlib import Path
 
 from src.assistant import BankAssistant
 from src.data import load_faq
+from src.normalize import answer_matches_language
 
 
 ROOT = Path(__file__).resolve().parent
@@ -50,6 +51,7 @@ def main() -> int:
                 "source_correct": source_correct,
                 "refusal_correct": refusal_correct,
                 "language": result.language,
+                "language_correct": answer_matches_language(result.answer, result.language),
                 "support_type": result.support_type,
                 "mode": result.metadata.get("mode", mode),
                 "answer_form": result.metadata.get("answer_form", "unknown"),
@@ -57,7 +59,7 @@ def main() -> int:
                 "latency_ms": elapsed,
                 "answer": result.answer,
             })
-            print(f"{question_id:02d} {'OK' if refusal_correct and source_correct else 'MISS'}  {result.status:8s} source={result.source_id} lang={result.language}  {row['question']}")
+            print(f"{question_id:02d} {'OK' if refusal_correct and source_correct else 'MISS'}  {result.status:8s} source={result.source_id} lang={result.language} lang_ok={rows[-1]['language_correct']}  {row['question']}")
 
     answered = [row for row in rows if not row["expected_unknown"]]
     unknown = [row for row in rows if row["expected_unknown"]]
@@ -67,6 +69,7 @@ def main() -> int:
         "unknown": len(unknown),
         "source_accuracy": sum(row["source_correct"] for row in answered) / max(1, len(answered)),
         "refusal_accuracy": sum(row["refusal_correct"] for row in rows) / max(1, len(rows)),
+        "language_accuracy": sum(row["language_correct"] for row in rows) / max(1, len(rows)),
         "overall_gate_accuracy": sum(row["source_correct"] and row["refusal_correct"] for row in rows) / max(1, len(rows)),
         "retrieval_mode": mode,
         "generator_loaded": model_loaded,
