@@ -38,7 +38,7 @@ class LocalGenerator:
             from transformers import AutoModelForCausalLM, AutoTokenizer
 
             self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
-            kwargs = {"device_map": "auto", "torch_dtype": "auto"}
+            kwargs = {"device_map": "auto"}
             if torch.cuda.is_available():
                 try:
                     from transformers import BitsAndBytesConfig
@@ -51,7 +51,18 @@ class LocalGenerator:
                     )
                 except Exception:
                     pass
-            self.model = AutoModelForCausalLM.from_pretrained(self.model_name, **kwargs)
+            # transformers 4.56 renamed the dtype argument; a pinned older host and
+            # a fresh Kaggle image therefore need different spellings. Loading with
+            # the wrong one raises TypeError, which would otherwise be recorded as a
+            # load error and quietly drop the demo into lexical-only smoke mode.
+            for dtype_keyword in ("dtype", "torch_dtype"):
+                try:
+                    self.model = AutoModelForCausalLM.from_pretrained(
+                        self.model_name, **kwargs, **{dtype_keyword: "auto"}
+                    )
+                    break
+                except TypeError:
+                    continue
         except Exception as exc:
             self.load_error = f"{type(exc).__name__}: {exc}"
 
@@ -80,9 +91,11 @@ class LocalGenerator:
             return None
         prompt = (
             "You are a strict FAQ support checker. Return only YES or NO. "
-            "Return YES when the FAQ answer directly answers the customer question "
-            "or safely covers a harmless specific case such as a spouse asking about a two-holder joint account. "
-            "Return NO when the question asks for a new policy, a personal data lookup, a location-specific fact, "
+            "Return YES when the FAQ answer directly answers the customer question, "
+            "or when it states a general rule that safely covers the specific case "
+            "asked about without contradicting it. "
+            "Return NO when the question asks for a new policy, a personal data lookup, "
+            "a location-specific fact, a figure the FAQ does not state, "
             "or contradicts the FAQ.\n\n"
             f"FAQ question: {entry.question}\nFAQ answer: {entry.answer}\nCustomer question: {question}\nDecision:"
         )
