@@ -22,6 +22,11 @@ EXPECTED_SOURCE = {
 
 def main() -> int:
     assistant = BankAssistant(load_faq(ROOT / "data" / "bank-faq.csv"))
+    mode = assistant.retriever.mode
+    model_loaded = assistant.generator.available
+    print(f"retrieval mode: {mode} | generator: {'loaded' if model_loaded else 'not loaded (deterministic fallback)'}")
+    if not model_loaded:
+        print(f"generator status: {assistant.generator.load_error or 'dependencies absent - answers are verbatim FAQ text in English'}")
     rows = []
     with (ROOT / "data" / "test-questions.csv").open("r", encoding="utf-8-sig", newline="") as handle:
         for row in csv.DictReader(handle):
@@ -43,6 +48,8 @@ def main() -> int:
                 "refusal_correct": refusal_correct,
                 "language": result.language,
                 "support_type": result.support_type,
+                "mode": result.metadata.get("mode", mode),
+                "answer_form": result.metadata.get("answer_form", "unknown"),
                 "confidence": result.confidence,
                 "latency_ms": elapsed,
                 "answer": result.answer,
@@ -58,7 +65,10 @@ def main() -> int:
         "source_accuracy": sum(row["source_correct"] for row in answered) / max(1, len(answered)),
         "refusal_accuracy": sum(row["refusal_correct"] for row in rows) / max(1, len(rows)),
         "overall_gate_accuracy": sum(row["source_correct"] and row["refusal_correct"] for row in rows) / max(1, len(rows)),
+        "retrieval_mode": mode,
+        "generator_loaded": model_loaded,
         "median_latency_ms": sorted(row["latency_ms"] for row in rows)[len(rows) // 2],
+        "p95_latency_ms": sorted(row["latency_ms"] for row in rows)[max(0, int(len(rows) * 0.95) - 1)],
         "rows": rows,
     }
     output = ROOT / "reports" / "offline_results.json"
