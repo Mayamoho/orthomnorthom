@@ -57,19 +57,19 @@ Locally, `python kaggle_demo.py` still runs the headless evaluation, and `python
 
 Answers come **only** from the BIAI-supplied `data/bank-faq.csv`. The 40-question `data/test-questions.csv` is held out for testing and is never used for training or tuning the model.
 
-As authorised by the BIAI Hiring Team on 3 November 2026, public general-purpose language data may be used to adapt the small model, provided no real bank or customer data is used and the source is disclosed. The outside data planned for that purpose is:
+As authorised by the BIAI Hiring Team on 3 November 2026, public general-purpose language data may be used to adapt the small model, provided no real bank or customer data is used and the source is disclosed. The optional Kaggle training cell actually uses only the first dataset below. The other public datasets were inspected or considered, but are not part of the trained adapter.
 
 | Dataset | Source | License | Used for |
 |---|---|---|---|
-| `istiaqfuad/bangla-english-banglish-pairs` | [HF](https://huggingface.co/datasets/istiaqfuad/bangla-english-banglish-pairs), derived from `Helsinki-NLP/opus-100` | CC-BY-4.0 | Bangla/Banglish↔English sentence pairs for the retrieval adapter |
-| `ShayonSarker/Bengali-to-Banglish-Dataset` | [HF](https://huggingface.co/datasets/ShayonSarker/Bengali-to-Banglish-Dataset) | MIT | Banglish term lexicon |
-| Mendeley Data `5h5vkhm9n5` (standard Bangla → Banglish → English) | [Mendeley](https://data.mendeley.com/datasets/5h5vkhm9n5) | CC-BY-4.0 | Banglish→English parallel pairs |
-| Vashantor (regional dialect → standard Bangla) | [GitHub](https://github.com/Mukaffi28/Vashantor-A-Large-scale-Multilingual-Benchmark-Dataset) | MIT | Dialect robustness / augmentation |
-| `istiaqfuad/triBne-e5-small` (adapter on `intfloat/multilingual-e5-small`) | [HF](https://huggingface.co/istiaqfuad/triBne-e5-small) | MIT | Multilingual embeddings. **Note:** this retriever was itself fine-tuned on the CC-BY pairs above, so outside data already reaches the system indirectly through the embedding model. |
+| `istiaqfuad/bangla-english-banglish-pairs` **(used by optional training)** | [HF](https://huggingface.co/datasets/istiaqfuad/bangla-english-banglish-pairs), derived from `Helsinki-NLP/opus-100` | CC-BY-4.0 | Up to 1,200 filtered public Bangla↔English banking-language pairs for a temporary Qwen LoRA query-rewriter experiment |
+| `istiaqfuad/triBne-e5-small` **(used as the retriever)** | [HF](https://huggingface.co/istiaqfuad/triBne-e5-small) | MIT | Multilingual embeddings. This third-party retriever was itself fine-tuned on public CC-BY parallel pairs; it supplies language similarity, not bank facts. |
+| `ShayonSarker/Bengali-to-Banglish-Dataset` **(not used in the shipped run)** | [HF](https://huggingface.co/datasets/ShayonSarker/Bengali-to-Banglish-Dataset) | MIT | Considered for a future Banglish lexicon |
+| Mendeley Data `5h5vkhm9n5` **(not used in the shipped run)** | [Mendeley](https://data.mendeley.com/datasets/5h5vkhm9n5) | CC-BY-4.0 | Considered for future Banglish→English pairs |
+| Vashantor **(not used in the shipped run)** | [GitHub](https://github.com/Mukaffi28/Vashantor-A-Large-scale-Multilingual-Benchmark-Dataset) | MIT | Considered for dialect robustness |
 
 Generators: `Qwen/Qwen3-1.7B`, Apache-2.0, 2.03B parameters (~1.2–1.5 GB at 4-bit). Embeddings: `multilingual-e5-small` lineage, ~118M parameters. Both are open-licensed and small enough for a Kaggle T4.
 
-Two datasets that were **downloaded and rejected**: the BGHL Bangla grammar QA set (domain mismatch, no stated licence) and a multilingual religious hate-speech set (contains scraped real user comments with author links — fails the no-real-data bar outright).
+Two downloaded datasets were **rejected and never used**: the BGHL Bangla grammar QA set (domain mismatch, no stated licence) and a multilingual religious hate-speech set (contains scraped real user comments with author links — fails the no-real-data bar outright).
 
 Nothing from any of these sources may enter an answer. They supply **language**, the FAQ supplies **facts**.
 

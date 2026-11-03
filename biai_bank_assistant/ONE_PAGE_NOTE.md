@@ -30,12 +30,10 @@ The one miss is test question 3 ("a transaction I did not make, where do I repor
 
 All public and general-purpose; no real bank or customer data; none of it contributes facts to any answer. Full table with licences is in `README.md`. In short:
 
-- `istiaqfuad/bangla-english-banglish-pairs` (CC-BY-4.0, derived from `Helsinki-NLP/opus-100`) — Bangla/Banglish↔English pairs.
-- `ShayonSarker/Bengali-to-Banglish-Dataset` (MIT) — Banglish term lexicon.
-- Mendeley Data `5h5vkhm9n5` (CC-BY-4.0) — standard Bangla → Banglish → English triples.
-- Vashantor (MIT) — regional dialect robustness only.
-- Inherited indirectly: the embedder `istiaqfuad/triBne-e5-small` (MIT) is a third-party fine-tune of `intfloat/multilingual-e5-small` trained on the CC-BY pairs above, so outside language data already reaches the system through the retrieval model.
-- Rejected after inspection: a Bangla grammar QA set with no stated licence, and a religious hate-speech set built from scraped real user comments with author links — that one fails the no-real-data rule outright.
+- **Used in the optional Kaggle training:** `istiaqfuad/bangla-english-banglish-pairs` (CC-BY-4.0, derived from `Helsinki-NLP/opus-100`), filtered to at most 1,200 public Bangla↔English banking-language pairs for a temporary Qwen LoRA query-rewriter experiment.
+- **Used as the retriever:** `istiaqfuad/triBne-e5-small` (MIT), a third-party fine-tune of `intfloat/multilingual-e5-small` on public parallel language data. It supplies language similarity only; the FAQ supplies every bank fact.
+- **Considered but not used in the shipped run:** `ShayonSarker/Bengali-to-Banglish-Dataset` (MIT), Mendeley Data `5h5vkhm9n5` (CC-BY-4.0), and Vashantor (MIT).
+- Rejected after inspection: a Bangla grammar QA set with no stated licence, and a religious hate-speech set built from scraped real user comments with author links.
 
 Models are open-licensed and small: Qwen3-1.7B (Apache-2.0, 2.03B parameters, ~1.2–1.5 GB at 4-bit) and the ~118M-parameter e5-small embedder (MIT).
 
