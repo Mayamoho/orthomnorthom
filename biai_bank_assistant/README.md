@@ -23,13 +23,33 @@ Everything here is grounded in the pack's own files: `data/bank-faq.csv` is the 
 
 ## Quick start
 
+**Linux (bash/zsh)**
+
 ```bash
 cd biai_bank_assistant
 python3 -m pip install -r requirements.txt      # PySide6 only, for the UI
 python3 main.py
 ```
 
-On Windows use `py -3` wherever you would type `python3`. Without `torch` the app runs in **SMOKE TEST** mode: it still answers and still refuses correctly, but it replies in the FAQ's own language because there is no model on that machine to rewrite it — the honest cost of running without weights is 20/40 on reply language, with everything else unchanged. The judged run is the GPU one in `notebooks/kaggle.ipynb`, whose numbers this file reports.
+**macOS (Terminal)**
+
+```bash
+cd biai_bank_assistant
+python3 -m pip install -r requirements.txt
+python3 main.py
+```
+
+**Windows (PowerShell)**
+
+```powershell
+cd biai_bank_assistant
+py -3 -m pip install -r requirements.txt
+py -3 main.py
+```
+
+On Windows Git Bash use the Linux form with `python3`. Never a bare `python`, which on some machines is still Python 2.
+
+Without `torch` the app runs in **SMOKE TEST** mode: it still answers and still refuses correctly, but it replies in the FAQ's own language because there is no model on that machine to rewrite it — the honest cost of running without weights is 20/40 on reply language, with everything else unchanged. The judged run is the GPU one in `notebooks/kaggle.ipynb`, whose numbers this file reports.
 
 | Variable | Effect |
 |---|---|
@@ -68,18 +88,6 @@ On Windows use `py -3` wherever you would type `python3`. Without `torch` the ap
 **Manual testing** — `python3 main.py`, then by hand: all three scripts plus a mixed one, a hand-off question, a question citing a figure the FAQ contradicts, and the fallback path with the endpoint unreachable. Then `python3 api_server.py` locally with `curl` against `/health` and `/answer`, with and without the bearer token, to confirm a wrong token surfaces as a `401` rather than a silent fallback, and that the pill switches to `MODEL READY — KAGGLE` when the URL is right. On Kaggle, section 3 of the notebook re-runs the renderer, verifier and transliterator assertions against the staged copy, and section 5 prints the 40-question table that `kaggle8.json` records.
 
 **What manual testing caught that the tests did not** — an unreadable question colour in the chat window, hyphens left inside Banglish words, `ত্রৈমাসিকে` reading as textbook rather than customer-facing Bangla, and a pile of errors when the serving cell was run a second time. Each one is now either an assertion above, a rule in `style_answer()`, or a guard in the notebook.
-
-## Files changed in this pass
-
-| File | Change |
-|---|---|
-| `src/bn_render.py` | numbers compared as values (`7.50%` = `7.5%`, `10:00 AM` = `10 AM`), so a correct Bangla sentence stopped being rejected; the `style_answer()` register pass; pinned renderings for the entries the run before this one served in English |
-| `ui/main_window.py`, `ui/theme.py` | chat visibility: questions and answers now render as dark role bubbles on the cream card instead of pale blue text, the inspector labels are no longer indigo on lilac, chat and composer type is larger, and the placeholder text is readable. Same palette, same layout, same borders and hard shadows |
-| `tests/test_regression.py` | new `test_style_answer_applies_customer_register`, covering both scripts' register rules |
-| `notebooks/kaggle.ipynb` | the notebook to run; section 7's baseline is `gemini-3.5-flash-lite`, and section 8's serving cell is hardened (generated token, port-in-use guard, waits on `/health` before opening the tunnel, reads log files instead of a blocking pipe, IPv4 edge, one warm-up answer printed through the endpoint) |
-| `README.md`, `ONE_PAGE_NOTE.md` | this file, and the notebook name corrected everywhere it was quoted |
-
-**What to re-upload to the `biai-bank-assistant` dataset:** the whole `src/` folder (not just `src/bn_render.py`, because the notebook stages it as a unit), `ui/main_window.py`, `ui/theme.py`, `tests/test_regression.py`, `notebooks/kaggle.ipynb`, and this `README.md`. `data/`, `evaluate.py`, `api_server.py` and `requirements-kaggle.txt` must stay at the dataset's top level — that is where the notebook reads them from. Section 3 of the notebook fails loudly when the staged `src/` predates these gates, so a stale upload shows up as a red cell rather than a quietly worse score.
 
 ## Data rule
 
