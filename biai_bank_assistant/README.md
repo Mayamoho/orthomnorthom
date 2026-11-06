@@ -50,6 +50,8 @@ There is nothing to install on the laptop except PySide6. **A laptop CPU cannot 
 
    **No ngrok account?** **Section 8** does the same thing through a Cloudflare quick tunnel: no account, no domain, no setup — and a random `https://<words>.trycloudflare.com` URL plus a token the cell generated, both dead when the session stops, so the laptop command must be retyped every single run. That is the only reason Cloudflare is still in the notebook: it is the zero-setup fallback, not the way to publish this.
 
+   The ngrok cell passes the authtoken per call instead of writing it to `ngrok.yml`, because `pyngrok.set_auth_token()` raises `PyngrokNgrokError: Authtoken already set in configuration file` on every re-run and on any container that ran the cell before. Re-running section 8.1 is now normal.
+
    Section 8 prints its URL **only after `/health` answers through it**. It used to take the first `https://` it found in cloudflared's log, and cloudflared prints `https://www.cloudflare.com/website-terms/` in its own diagnostics — that is a Cloudflare web page, it answers a POST with **403 Forbidden**, and the desktop app then says the endpoint did not answer. The cell now matches only `*.trycloudflare.com` hosts and polls the edge for up to a minute before printing anything.
 
    **When the window says the endpoint did not answer**, the inspector now prints the real reason. Three causes, in the order they actually happen:
