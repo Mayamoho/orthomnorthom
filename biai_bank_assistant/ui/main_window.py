@@ -298,7 +298,9 @@ class MainWindow(QMainWindow):
         if result.status == "answered":
             note = self._provenance(result)
             if result.metadata.get("remote_error"):
-                note += " The Kaggle endpoint was unreachable, so this reply came from this machine."
+                note += (f" The Kaggle endpoint did not answer ({result.metadata['remote_error']}), "
+                         "so this reply came from this machine.")
+                self._report_endpoint_failure(result.metadata["remote_error"])
             self.grounding.setText(f"Grounded in FAQ {result.source_id}. Support type: {result.support_type.replace('_', ' ')}.{note}")
         else:
             reasons = {
@@ -309,6 +311,15 @@ class MainWindow(QMainWindow):
                 "faq_entailment_rejected": "The local model rejected the retrieved FAQ.",
             }
             self.grounding.setText(reasons.get(result.support_type, "No supported FAQ evidence.") + " Human handoff offered.")
+
+    def _report_endpoint_failure(self, error: str):
+        """Correct the pill the moment a served answer fails, not only at startup.
+
+        /health answers without a token, so a wrong token or a URL that is not the
+        endpoint can still look healthy until the first question is POSTed.
+        """
+        self.status_pill.setText("\u25cf  ENDPOINT FAILED \u2014 LOCAL FAQ")
+        self.mode_value.setText(f"Remote call failed: {error}")
 
     def _provenance(self, result) -> str:
         """Say which model produced the reply the customer is looking at."""

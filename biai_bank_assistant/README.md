@@ -39,7 +39,7 @@ There is nothing to install on the laptop except PySide6. **A laptop CPU cannot 
 
    Nothing is pasted into a cell, the dataset or git. A secret is injected at run time, and notebook output is shared with the notebook, which is exactly why the token is not echoed.
 
-3. **Run section 8.1** (section 5 first, so the models are loaded). It installs FastAPI and pyngrok, starts `api_server.py` on the GPU, answers one Banglish question through the local endpoint so you can see the served text, opens the tunnel on your reserved domain, checks `/health` through the public URL, and prints at the end:
+3. **Run section 8.1** (section 5 first, so the models are loaded). It installs FastAPI and pyngrok, starts `api_server.py` on the GPU, answers one Banglish question through the local endpoint so you can see the served text, opens the tunnel on your reserved domain, checks `/health` through the public URL and only then prints:
 
    ```text
    BIAI_API_URL="https://xxxxxxxx-ngrok-free.app"
@@ -49,6 +49,16 @@ There is nothing to install on the laptop except PySide6. **A laptop CPU cannot 
    Copy both **exactly**. `api_server.py` compares the `Authorization` header against the token it loaded from that secret, so any other value — including one from a token-generator website — is a `401`. Because the domain is reserved and the token is yours, these two values are now permanent: the same next week, in a different notebook, on a different laptop.
 
    **No ngrok account?** **Section 8** does the same thing through a Cloudflare quick tunnel: no account, no domain, no setup — and a random `https://<words>.trycloudflare.com` URL plus a token the cell generated, both dead when the session stops, so the laptop command must be retyped every single run. That is the only reason Cloudflare is still in the notebook: it is the zero-setup fallback, not the way to publish this.
+
+   Section 8 prints its URL **only after `/health` answers through it**. It used to take the first `https://` it found in cloudflared's log, and cloudflared prints `https://www.cloudflare.com/website-terms/` in its own diagnostics — that is a Cloudflare web page, it answers a POST with **403 Forbidden**, and the desktop app then says the endpoint did not answer. The cell now matches only `*.trycloudflare.com` hosts and polls the edge for up to a minute before printing anything.
+
+   **When the window says the endpoint did not answer**, the inspector now prints the real reason. Three causes, in the order they actually happen:
+
+   | What it says | What it means | Fix |
+   |---|---|---|
+   | `endpoint replied 403` on an ngrok URL | the hostname is not bound to the tunnel your `NGROK_AUTHTOKEN` opened — a second ngrok account owns that domain, or an older session still holds it | check the **Domains** page belongs to the same account as the authtoken, then re-run section 8.1 |
+   | `endpoint replied 401` | wrong `BIAI_API_TOKEN` on the laptop | copy the value you put in the secret, exactly |
+   | `URLError` / `RemoteDisconnected`, pill `LOCAL FAQ` | the notebook session is stopped, so nothing is listening | `Run All`, or section 8.1 alone; the app keeps answering from the FAQ meanwhile |
 
 4. **Run the desktop app against it.** Three commands on every machine; only how you set the two variables differs. Use `python3` (Linux/macOS) or `py -3` (Windows) — never a bare `python`, which on some machines is still Python 2.
 
