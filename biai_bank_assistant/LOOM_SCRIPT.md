@@ -75,10 +75,12 @@ Screen: section 5 output table in the notebook, then `ONE_PAGE_NOTE.md` results 
 > tunnel dies, it says so and keeps answering from the local FAQ — a dead
 > connection is not a blank box.
 > And the required comparison: the same forty questions through
-> `gemini-3.5-flash-lite`. Only the synthetic questions go out — no FAQ, no
-> customer data. Hand-off rate, invented figures and latency are scored by the
-> cell; whether the hosted model's *content* is right is a human read, and the
-> table says 'needs human review' instead of inventing a number."
+> `gemini-3.5-flash-lite`, given the same retrieved FAQ entry and the same rules
+> our own model gets — like-for-like, not a weaker prompt. Only synthetic
+> questions and FAQ text go out; no customer data. Hand-off rate, invented
+> figures and latency are scored by the cell; whether the hosted model's
+> *content* is right is a human read, and the table says 'needs human review'
+> instead of inventing a number."
 
 Screen: desktop app typing `Card er PIN bhule gechi, reset korbo kibhabe?` → Banglish
 reply; then notebook section 7 table.
