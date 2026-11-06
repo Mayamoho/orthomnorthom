@@ -81,16 +81,34 @@ There is nothing to install on the laptop except PySide6. **A laptop CPU cannot 
 
    A `LOCAL FAQ` pill means the token was wrong or the tunnel died: the window says so and keeps answering from the FAQ on the machine, so the demo never becomes a blank box. Re-run section 8 and copy the new values.
 
-### A link that survives between sessions (notebook section 8.1)
+### A link that survives between sessions (notebook section 8.1) — ngrok
 
 The `trycloudflare.com` address above is generated per run, so the laptop command is different every time. **ngrok's free tier reserves one permanent domain to your account** — `https://<your-name>-ngrok-free.app` — and notebook **section 8.1** publishes the same endpoint through it, so the command you type on the laptop stops changing.
 
-1. Make a free ngrok account and open **<https://dashboard.ngrok.com/get-started/your-authtoken>**. That page shows two things you need: the **authtoken**, and the account's **Free Domain**.
-2. In the Kaggle notebook's right-hand panel, **Add-ons and Secrets → New Secret**, twice:
-   - `NGROK_AUTHTOKEN` = the authtoken from step 1;
-   - `BIAI_API_TOKEN` = any long string you invent once — `python3 -c "import secrets;print(secrets.token_urlsafe(18))"`. This is the part that makes the *token* half of the command permanent. The cell never prints it, so it cannot end up in a shared notebook's output.
-3. Keep **Internet** on and run section 8.1. It reuses the server section 8 started (or starts its own), opens the tunnel, reads `/health` through the public URL to prove JSON comes back, and prints the laptop command with the permanent hostname already filled in.
-4. Type that command on the laptop. From then on it is the same two values every session — only `Run All` in the notebook changes.
+There are three URLs in this project and only two of them are typed anywhere:
+
+| URL | Where it comes from | Use it for |
+|---|---|---|
+| `http://127.0.0.1:8000` | uvicorn inside the notebook | never typed; it is what the tunnel points at |
+| `https://<random>.trycloudflare.com` | notebook **section 8**, printed at the end of the cell | one demo, one session; changes every run |
+| `https://<your-name>-ngrok-free.app` | your ngrok account's **Free Domain** page, reprinted by **section 8.1** | the link you keep and hand to someone |
+
+**Secrets to add** — notebook right-hand panel → **Add-ons and Secrets → Secrets → New Secret**. Two, once, never in a cell and never in git:
+
+| Secret name (exact) | Value | Why |
+|---|---|---|
+| `NGROK_AUTHTOKEN` | from <https://dashboard.ngrok.com/get-started/your-authtoken> | lets the ngrok agent start; the same page shows your reserved domain |
+| `BIAI_API_TOKEN` | one long string you invent, e.g. `python3 -c "import secrets;print(secrets.token_urlsafe(18))"` | makes the token half of the laptop command permanent; section 8.1 deliberately does not print it |
+| `GEMINI_API_KEY` | <https://aistudio.google.com/apikey> | only section 7 needs it, not the tunnel |
+
+**Getting the URL, in order.** 1) Add `NGROK_AUTHTOKEN` (and `BIAI_API_TOKEN` if you want the fixed token). 2) Turn **Internet** on in the same panel. 3) Run section 8 (or section 5 first — either way the cell starts uvicorn if nothing is answering on port 8000), then run the section 8.1 cell. 4) It prints `public health: {"online": true, …}` and then the two lines to copy:
+
+```text
+BIAI_API_URL="https://<your-name>-ngrok-free.app"
+BIAI_API_TOKEN="<the value you put in the BIAI_API_TOKEN secret>"
+```
+
+5) Type them on the laptop with the commands in step 3 above. That string is finished: the next session needs only `Run All`, the URL does not change, and the laptop command is already correct. `BIAI_API_PORT` overrides 8000 in both cells if the port is taken; `NGROK_DOMAIN` is only for an account holding more than one domain.
 
 What "survives" honestly means: the **address** is permanent because it belongs to the ngrok account; the **server** is not, because Kaggle has no always-on container and a session ends when you stop it or after roughly 9 hours of GPU time. While the notebook is off, the app falls back to the FAQ on the laptop and the pill reads `LOCAL FAQ` — which is the designed behaviour, not an error. Free ngrok domains show an interstitial page to browsers, so `src/remote.py` sends `ngrok-skip-browser-warning: 1` on both of its calls and the app reads JSON, not that page.
 
@@ -177,6 +195,30 @@ py -3 main.py
 
 On Windows Git Bash use the Linux form with `python3`. Never a bare `python`, which on some machines is still Python 2.
 
+### What the local run is, and the file it is linked to
+
+Running it here is the same code path that wrote **[`reports/offline_results.json`](reports/offline_results.json)** —
+that file is the record of the 40-question run and the source of every number in this README and in
+`ONE_PAGE_NOTE.md`. It is in the repo so the claims can be checked line by line without a GPU. Each of
+its 40 rows carries `id`, `question`, `status`, `source_id`, `language`, `answer`, `support_type`,
+`answer_form` (`model`, `source_style_fallback` or `faq_fallback`), `render_latency_ms` and `latency_ms`,
+and the header block says what the run was: `retrieval_mode: "dense"`, `generator_loaded: true`,
+`source_accuracy`/`refusal_accuracy`/`language_accuracy`/`overall_gate_accuracy` all `1.0`, median latency
+15.3 ms, p95 3172 ms.
+
+Two commands regenerate it, and they are the same two commands the notebook runs:
+
+```bash
+python3 -m pip install -r requirements-kaggle.txt   # torch + transformers for the model stack
+python3 evaluate.py                                 # writes reports/offline_results.json
+```
+
+Without `torch` installed, `python3 evaluate.py` still writes the file, but with
+`retrieval_mode: "lexical"` and `generator_loaded: false` — that is the smoke-test column, not this one.
+The committed `reports/offline_results.json` is the model-stack run, and the app pointed at the Kaggle
+endpoint (next section) answers from the same stack, so what the desktop window shows is the same text
+that file records, row for row.
+
 Without `torch` the app runs in **SMOKE TEST** mode: it still answers and still refuses correctly, but it replies in the FAQ's own language because there is no model on that machine to rewrite it — the honest cost of running without weights is 20/40 on reply language, with everything else unchanged. The numbers this file reports come from the tunnel path above.
 
 | Variable | Effect |
@@ -207,7 +249,7 @@ The same four questions from step 4 still work here, and the FAQ source, the han
 - `test_remote_headers_skip_the_ngrok_interstitial` — the endpoint calls carry `ngrok-skip-browser-warning`, so a free ngrok domain answers JSON instead of its HTML warning page, and the bearer token is only sent when one exists.
 - `test_training_script_does_not_reference_held_out_questions` — static check that `train.py` never opens `test-questions.csv` and names only the disclosed public corpora.
 
-**Evaluation run** — `python3 evaluate.py` answers all 40 questions end to end and writes `reports/offline_results.json`. I read that file line by line rather than trusting the aggregate: 30/30 on the FAQ source, 10/10 on the hand-offs, language and latency per script, and for each row the `support_type`, the `answer_form` (model or fallback) and `rendered_by`. The English-leak cases in the run before this one were found exactly this way — a 27/30 headline still hides a sentence-level bug.
+**Evaluation run** — `python3 evaluate.py` answers all 40 questions end to end and writes [`reports/offline_results.json`](reports/offline_results.json), the file committed in this repo and the one every number in this README and in `ONE_PAGE_NOTE.md` is read from. I read that file line by line rather than trusting the aggregate: 30/30 on the FAQ source, 10/10 on the hand-offs, language and latency per script, and for each row the `support_type`, the `answer_form` (model or fallback) and `rendered_by`. The English-leak cases in the run before this one were found exactly this way — a 27/30 headline still hides a sentence-level bug.
 
 **Manual testing** — `python3 main.py`, then by hand: all three scripts plus a mixed one, a hand-off question, a question citing a figure the FAQ contradicts, and the fallback path with the endpoint unreachable. Then `python3 api_server.py` locally with `curl` against `/health` and `/answer`, with and without the bearer token, to confirm a wrong token surfaces as a `401` rather than a silent fallback, and that the pill switches to `MODEL READY — KAGGLE` when the URL is right. On Kaggle, section 3 of the notebook re-runs the renderer, verifier and transliterator assertions against the staged copy, and section 5 prints the 40-question table that `kaggle8.json` records.
 
