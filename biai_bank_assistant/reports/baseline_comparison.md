@@ -43,3 +43,8 @@
 | 38 | KYC update koto bochor por por korte hoy? | KYC update korte hobe prottek 5 bochor e. Deadline er age apnake SMS reminder pathano hobe. NID ebong ekta recent utility bill niye apnar branch e jan | KYC must be updated every 5 years. |
 | 39 | আমার ব্যবসার জন্য ভিসা সহায়তা পাওয়া যাবে? | আমি জানি না, একজন প্রতিনিধির সাথে সংযোগ করে দিচ্ছি। | HANDOFF |
 | 40 | How do I close my account? | Visit your branch with your NID and fill in the closure form. If the account is closed within 6 months of opening, a fee of BDT 500 applies. | Visit your branch with your NID and fill in the closure form. If the account is closed within 6 months of opening, a fee of BDT 500 applies. |
+
+**How the hosted replies read — mode=faq, gemini-3.5-flash-lite:**
+- in the script the customer used: en 10/10, bn 7/9, banglish 0/11
+- fragments rather than sentences: 2/30 (ids 10, 31)
+- dropping a figure the entry states: 10/30 (ids 1, 3, 8, 10, 12, 14, 20, 29, 31, 35)
