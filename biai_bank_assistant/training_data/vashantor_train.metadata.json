@@ -1,0 +1,9 @@
+{
+  "dataset": "Vashantor",
+  "license": "CC-BY-4.0",
+  "source_url": "https://data.mendeley.com/datasets/bj5jgk878b/2",
+  "doi": "10.17632/bj5jgk878b.2",
+  "split": "Train only",
+  "rows": 1895,
+  "purpose": "language/dialect supervision only; no bank facts"
+}

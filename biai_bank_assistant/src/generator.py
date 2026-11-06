@@ -3,8 +3,7 @@ from __future__ import annotations
 import os
 
 from .models import FAQEntry
-from .normalize import answer_matches_language, language_name
-
+from .normalize import language_name, strip_answer_artifacts
 
 REFUSALS = {
     "en": "I don't know, let me connect you to a person.",
@@ -18,8 +17,23 @@ def refusal(language: str) -> str:
     return REFUSALS.get(language, REFUSALS["en"])
 
 
+def _answer_budget() -> int:
+    """Bengali costs about 5.5 tokens per word on a Qwen tokenizer, so the 96
+    tokens this shipped with cut two-sentence Bangla answers in the middle of a
+    word; the format gate then had to reject an otherwise correct reply."""
+    try:
+        return max(64, int(os.getenv("BIAI_MAX_NEW_TOKENS", "256")))
+    except ValueError:
+        return 256
+
+
 class LocalGenerator:
-    """Qwen-backed generator with a deterministic fallback for local smoke tests."""
+    """Local causal-LM rewriter over the FAQ text, with a deterministic fallback.
+
+    The model is asked to reuse the FAQ's own facts in the customer's script.
+    Public bilingual language training and a few language-only demonstrations
+    make the rewrite more reliable while the FAQ remains the only factual source.
+    """
 
     def __init__(self, model_name: str | None = None):
         self.model_name = model_name or os.getenv("BIAI_GENERATION_MODEL", "Qwen/Qwen3-1.7B")
@@ -39,6 +53,8 @@ class LocalGenerator:
             from transformers import AutoModelForCausalLM, AutoTokenizer
 
             self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+            if self.tokenizer.pad_token is None:
+                self.tokenizer.pad_token = self.tokenizer.eos_token
             kwargs = {"device_map": "auto"}
             if torch.cuda.is_available():
                 try:
@@ -47,7 +63,7 @@ class LocalGenerator:
                     kwargs["quantization_config"] = BitsAndBytesConfig(
                         load_in_4bit=True,
                         bnb_4bit_quant_type="nf4",
-                        bnb_4bit_compute_dtype=torch.float16,
+                        bnb_4bit_compute_dtype=torch.bfloat16,
                         bnb_4bit_use_double_quant=True,
                     )
                 except Exception:
@@ -58,86 +74,169 @@ class LocalGenerator:
             # load error and quietly drop the demo into lexical-only smoke mode.
             for dtype_keyword in ("dtype", "torch_dtype"):
                 try:
-                    self.model = AutoModelForCausalLM.from_pretrained(
+                    base_model = AutoModelForCausalLM.from_pretrained(
                         self.model_name, **kwargs, **{dtype_keyword: "auto"}
                     )
+                    adapter_path = os.getenv("BIAI_ADAPTER_PATH", "").strip()
+                    if adapter_path:
+                        try:
+                            from peft import PeftModel
+                        except ImportError as exc:
+                            raise RuntimeError(
+                                "BIAI_ADAPTER_PATH is set but peft is not installed"
+                            ) from exc
+                        self.model = PeftModel.from_pretrained(base_model, adapter_path)
+                    else:
+                        self.model = base_model
+                    self.model.eval()
                     break
                 except TypeError:
                     continue
         except Exception as exc:
             self.load_error = f"{type(exc).__name__}: {exc}"
 
+    @staticmethod
+    def _register(language: str) -> str:
+        return {
+            "bn": "Bangla, written in Bengali script only",
+            "banglish": "Banglish, which is Bangla words written with Latin letters",
+        }.get(language, "English")
+
+    def _messages(self, question: str, entry: FAQEntry, language: str) -> list[dict]:
+        register = self._register(language)
+        # The bank's own English sentence is the only text the model is given, so
+        # putting it in the customer's script is the model's job and the whole of
+        # requirement 2. Nothing else may be the anchor: a second file of prepared
+        # Bangla answers would be a second source of facts.
+        source_block = f"FAQ answer ({language_name('en')}): {entry.answer}"
+        customer = f"Customer question: {question}"
+        # The English gloss of the customer's line is deliberately absent here. It
+        # is model-visible text and a 1.7B model copies it: one Kaggle reply read
+        # "…kibhabe of will do how?" because the prompt had offered "of, will, do,
+        # how" as the reading of the customer's own words. The gloss still guides
+        # the YES/NO support check, which is a classifier and cannot leak it into
+        # prose.
+
+        demonstrations = ""
+        if language == "bn":
+            demonstrations = (
+                "\nStyle examples (these are language examples only, not bank facts):\n"
+                "Customer: কার্ডের পিন কীভাবে বদলাব?\n"
+                "Answer: অ্যাপের সেটিংস থেকে কার্ড নির্বাচন করে পিন রিসেট করুন।\n"
+                "Customer: অ্যাকাউন্ট খুলতে কী লাগবে?\n"
+                "Answer: অ্যাকাউন্ট খোলার জন্য প্রয়োজনীয় কাগজপত্র জমা দিন।\n"
+            )
+        elif language == "banglish":
+            demonstrations = (
+                "\nStyle examples (these are language examples only, not bank facts):\n"
+                "Customer: card er PIN kibhabe bodlabo?\n"
+                "Answer: App-er settings theke card select kore PIN reset korun.\n"
+                "Customer: account khulte ki lagbe?\n"
+                "Answer: Account kholar jonno proyojoniyo documents joma din.\n"
+            )
+
+        system = (
+            "You are Nirbhor Bank's offline FAQ assistant. You never invent facts. "
+            "Every number, date, percentage, fee, product name and hotline must appear exactly as "
+            "written in the FAQ answer. Answer in "
+            f"{register}, in one or two short sentences. "
+            "Start with the fact itself: a figure, a day, a step or the product name. "
+            "Never repeat or restate the customer's question, never write a label such as "
+            "'Answer:', never add a greeting or a preamble."
+        )
+        user = (
+            f"{demonstrations}\nTask: english to {language}.\n{source_block}\n{customer}\n"
+            f"Give the customer that FAQ answer in {register}. Say exactly what the FAQ answer "
+            "says and change no figure, date, fee or product name. Reply with the answer only."
+        )
+        return [{"role": "system", "content": system}, {"role": "user", "content": user}]
+
+    def _apply_template(self, messages: list[dict]) -> str:
+        try:
+            return self.tokenizer.apply_chat_template(
+                messages, tokenize=False, add_generation_prompt=True, enable_thinking=False
+            )
+        except (TypeError, ValueError):
+            # Not every chat template takes enable_thinking, and a LoRA merged
+            # from a base model may have no template at all. Rendering plainly
+            # keeps a loaded model answering instead of erroring into the
+            # deterministic path.
+            try:
+                return self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+            except (TypeError, ValueError):
+                return "\n".join(f"{role}: {content}" for role, content in messages) + "\nassistant:"
+
+    def _generate(self, messages: list[dict], max_new_tokens: int) -> str:
+        import torch
+
+        text = self._apply_template(messages)
+        inputs = self.tokenizer([text], return_tensors="pt").to(self.model.device)
+        with torch.inference_mode():
+            outputs = self.model.generate(
+                **inputs,
+                max_new_tokens=max_new_tokens,
+                do_sample=False,
+                pad_token_id=self.tokenizer.pad_token_id,
+                eos_token_id=self.tokenizer.eos_token_id,
+            )
+        return self.tokenizer.decode(outputs[0][inputs.input_ids.shape[-1] :], skip_special_tokens=True).strip()
+
     def answer(self, question: str, entry: FAQEntry, language: str) -> str:
         self.load()
         if not self.available:
             return self._fallback(entry, language)
+        try:
+            messages = self._messages(question, entry, language)
+            raw = self._generate(messages, _answer_budget())
+            cleaned = strip_answer_artifacts(raw)
+            # A small model may ignore the register on its first pass. One short
+            # retry keeps the adapter-backed path useful without allowing an
+            # English draft to reach the customer. The assistant applies the
+            # final grounding/script gates after this method returns.
+            if language in {"bn", "banglish"}:
+                from .normalize import answer_matches_language
 
-        if language == "bn":
-            language_instruction = (
-                "Write entirely in Bangla using Bengali script. Do not write English sentences. "
-                "Keep bank and product names, numbers, dates, and hotline digits unchanged."
-            )
-        elif language == "banglish":
-            language_instruction = (
-                "Write in Banglish: Bengali language written with Latin/English letters. "
-                "Do not answer in standard English. Keep bank and product names, numbers, "
-                "dates, and hotline digits unchanged."
-            )
-        else:
-            language_instruction = "Write entirely in English."
+                if not answer_matches_language(cleaned, language):
+                    retry = messages + [{
+                        "role": "user",
+                        "content": (
+                            f"FORMAT FAILURE: rewrite the answer entirely in {self._register(language)}. "
+                            "Do not use an English sentence. Output only the finished answer."
+                        ),
+                    }]
+                    cleaned = strip_answer_artifacts(self._generate(retry, _answer_budget()))
+            return cleaned or self._fallback(entry, language)
+        except Exception as exc:
+            self.load_error = f"generation failed: {type(exc).__name__}: {exc}"
+            return self._fallback(entry, language)
 
-        prompt = (
-            "You are Nirbhor Bank's offline FAQ assistant. Use only the FAQ answer below. "
-            "Do not add facts. Preserve every number, date, fee, percentage, product name, and hotline. "
-            f"{language_instruction} Keep the answer to two short sentences.\n\n"
-            f"FAQ question: {entry.question}\nFAQ answer: {entry.answer}\nCustomer question: {question}\nAnswer:"
-        )
-        messages = [{"role": "user", "content": prompt}]
-        text = self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True, enable_thinking=False)
-        inputs = self.tokenizer([text], return_tensors="pt").to(self.model.device)
-        outputs = self.model.generate(**inputs, max_new_tokens=96, do_sample=False)
-        answer = self.tokenizer.decode(outputs[0][inputs.input_ids.shape[-1] :], skip_special_tokens=True).strip()
-        if answer and answer_matches_language(answer, language):
-            return answer
-
-        # Qwen can follow the facts while missing the requested register. Give
-        # it one stricter retry before the assistant applies its hard guard.
-        strict_prompt = (
-            prompt
-            + "\nThis is a strict format check. An answer in the wrong language is invalid. "
-            + f"The required language is {language_name(language)}. Output only that language."
-        )
-        strict_messages = [{"role": "user", "content": strict_prompt}]
-        strict_text = self.tokenizer.apply_chat_template(
-            strict_messages, tokenize=False, add_generation_prompt=True, enable_thinking=False
-        )
-        strict_inputs = self.tokenizer([strict_text], return_tensors="pt").to(self.model.device)
-        strict_outputs = self.model.generate(**strict_inputs, max_new_tokens=96, do_sample=False)
-        strict_answer = self.tokenizer.decode(
-            strict_outputs[0][strict_inputs.input_ids.shape[-1] :], skip_special_tokens=True
-        ).strip()
-        return strict_answer or answer or self._fallback(entry, language)
-
-    def supports(self, question: str, entry: FAQEntry) -> bool | None:
+    def supports(self, question: str, entry: FAQEntry, reading: str | None = None) -> bool | None:
         """Ask the local model for a conservative FAQ entailment decision."""
         self.load()
         if not self.available:
             return None
-        prompt = (
+        system = (
             "You are a strict FAQ support checker. Return only YES or NO. "
             "Return YES when the FAQ answer directly answers the customer question, "
             "or when it states a general rule that safely covers the specific case "
             "asked about without contradicting it. "
             "Return NO when the question asks for a new policy, a personal data lookup, "
             "a location-specific fact, a figure the FAQ does not state, "
-            "or contradicts the FAQ.\n\n"
-            f"FAQ question: {entry.question}\nFAQ answer: {entry.answer}\nCustomer question: {question}\nDecision:"
+            "or contradicts the FAQ."
         )
-        messages = [{"role": "user", "content": prompt}]
-        text = self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True, enable_thinking=False)
-        inputs = self.tokenizer([text], return_tensors="pt").to(self.model.device)
-        outputs = self.model.generate(**inputs, max_new_tokens=4, do_sample=False)
-        decision = self.tokenizer.decode(outputs[0][inputs.input_ids.shape[-1] :], skip_special_tokens=True).strip().upper()
+        user = (
+            f"FAQ question: {entry.question}\nFAQ answer: {entry.answer}\n"
+            f"Customer question: {question}\nDecision:"
+        )
+        if reading and reading.strip() != question.strip():
+            user += f"\nEnglish gloss of the customer question: {reading}"
+        try:
+            decision = self._generate(
+                [{"role": "system", "content": system}, {"role": "user", "content": user}], max_new_tokens=8
+            )
+        except Exception:
+            return None
+        decision = decision.strip().upper()
         if decision.startswith("YES"):
             return True
         if decision.startswith("NO"):
@@ -146,8 +245,10 @@ class LocalGenerator:
 
     @staticmethod
     def _fallback(entry: FAQEntry, language: str) -> str:
-        if entry.faq_id == 14 and language == "bn":
-            return "হ্যাঁ। যৌথ অ্যাকাউন্টে সর্বোচ্চ ২ জন হিসাবধারী থাকতে পারেন এবং দুজনকেই অ্যাকাউন্ট খোলার কাগজপত্রে স্বাক্ষর করতে হবে।"
-        if entry.faq_id == 14 and language == "banglish":
-            return "Haan. Joint account-e shorbocho 2 jon holder thakte paren, ebong dujonkei account opening documents-e sign korte hobe."
+        """The bank's own sentence, in the only form the FAQ supplies it: English.
+
+        Used when no model is loaded, or when a model reply failed a grounding
+        check. The right figure in the wrong script is a smaller failure than an
+        invented fact, and the interface says plainly that no model wrote this.
+        """
         return entry.answer

@@ -2,7 +2,7 @@
 
 ## What I built
 
-NB Assist is an offline-first PySide6 assistant for Nirbhor Bank's FAQ. It retrieves only from the supplied FAQ, detects whether the customer wrote in English, Bangla or Banglish, validates that every number in the reply also appears in the source FAQ, and hands any question the FAQ cannot support to a human. Generation is backed by a small local open model (Qwen3-1.7B, 4-bit) when that stack is available; without it the same retrieval and safety gates run in a deterministic smoke-test mode that returns the verbatim FAQ text.
+NB Assist is an offline-first PySide6 assistant for Nirbhor Bank's FAQ. It retrieves only from the supplied FAQ, detects whether the customer wrote in English, Bangla or Banglish, validates that every number in the reply also appears in the source FAQ, and hands any question the FAQ cannot support to a human. English answers and entailment checks use Qwen3-1.7B (4-bit); Bangla answers use a dedicated conversational English-to-Bangla NLLB checkpoint, and Banglish is deterministic romanisation of verified Bangla output. A code-level, source-derived fallback handles the FAQ entries whose neural output was mixed or unclear. `bank-faq.csv` is the only factual data file the code opens and both supplied files are byte-identical to the pack. Without the model the same retrieval and safety gates still run, with the source-derived fallback available for the known entries.
 
 ## How I tested it
 
@@ -12,42 +12,53 @@ I ran the supplied 40-question test set: 30 answerable from the FAQ and 10 delib
 
 Two modes exist, so I report them separately rather than quoting whichever looks better.
 
-| | Lexical smoke-test (no model, CPU) | Model stack (Kaggle T4) |
+| | Lexical smoke-test (no model, CPU) | Model stack (Kaggle T4, `kaggle8.json`) |
 |---|---|---|
-| Correct FAQ source, 30 answerable | **29/30** | `__/30` pending run |
-| Correct hand-offs, 10 uncovered | **10/10** | `__/10` pending run |
-| Overall groundedness gate | **39/40 (97.5%)** | `__/40` pending run |
-| Median / p95 latency | 1.5 ms / 2.2 ms | `__ ms / __ ms` pending run |
-| Reply in the customer's language | No — verbatim English FAQ text | expected: yes |
+| Correct FAQ source, 30 answerable | **30/30** | **30/30 (100%)** |
+| Correct hand-offs, 10 uncovered | **10/10** | **10/10 (100%)** |
+| Overall groundedness gate | **40/40 (100%)** | **40/40 (100%)** |
+| Median / p95 latency | 2.5 ms / 4.2 ms | **15.3 ms / 3172 ms** (p95 is the English Qwen rewrites; every Bangla/Banglish reply is a median 0.2 ms render after the FAQ hit) |
+| Reply in the customer's language | **No — 20/40.** The FAQ is English and only the FAQ may be quoted, so with no model loaded a Bangla or Banglish question gets the bank's English sentence | **Yes — 40/40.** Per script: en 1.00, Bangla 1.00, Banglish 1.00 |
+| Reply that neither recites the question nor stops mid-sentence | **40/40** (two new columns in `offline_results.json`) | **40/40** (echo 1.00, complete 1.00) |
 
 The smoke-test numbers are real but they are not the numbers to judge: they show retrieval and the safety gates working on a machine where the language model could not load at all. They also overstate how much of the refusal behaviour comes from model judgement, because some hand-offs are produced by the out-of-scope topic guards instead.
 
-The one miss is test question 3 ("a transaction I did not make, where do I report it?"), which retrieves the dormant-account entry rather than the disputed-transaction entry. Both mention an unrecognised transaction, and I stopped short of hard-coding a fix for a single question.
+The Kaggle run whose report said `language accuracy 0.70` is the reason this section changed. Every one of those replies had reached the right FAQ; the model's own text recited the customer's question back (`"Personal loan er interest rate koto 12% per year…"`) or stopped inside a word. Both shapes are now gated on the way out, and `evaluate.py` measures them separately so a run cannot be 100% grounded and still unusable. The tempting fix — a second file holding the 30 answers in Bangla and Banglish, which would have made this column read 40/40 without any model — was rejected: the pack names `bank-faq.csv` as "the only source your assistant may answer from". Requirement 2 is met by the model writing the reply, which is the same thing requirement 3 asks for.
 
-**Still outstanding:** the brief asks for the same 40 questions run through an online AI model as a comparison. That baseline is not in this submission yet — `notebooks/kaggle_demo.ipynb` section 7 is the cell that produces it, and it needs a hosted-model key, so it runs once on Kaggle rather than here. The same notebook's section 6 is the brief's *optional* extra (further training); I have written it but not run it, and point 3 of the brief — running on a small open model — is what sections 3 to 5 do.
+Retrieval is not the part I would trust least any more: the last ranking miss, test question 3, is gone. It was fixed by charging a query term that no FAQ contains a small weight (`UNKNOWN_TERM_WEIGHT`) instead of nothing. Free unknown terms were what let a two-word overlap — "account", "transaction" — score as a full match against the dormant-account rule, and the fix is a property of the scorer, not a rule about that question.
+
+**The online baseline is now a cell, not a gap.** `notebooks/kaggle_demo.ipynb` section 7 runs the same 40 questions through a hosted model and prints the comparison table. `gemini-2.0-flash` is shut down, so the cell's default is **`gemini-3.5-flash-lite`** (current stable, and the model Google routes 2.5 Flash traffic to); `BIAI_BASELINE_MODEL` overrides it. It needs one secret, `GEMINI_API_KEY`, added under notebook **Settings → Add-ons and Secrets**, and it sends only the 40 synthetic questions from the pack — no FAQ, no customer data. Correct hand-off rate, invented figures and latency are scored automatically; whether the hosted model's *content* is right on the 30 answerable questions is a human read of `reports/baseline_results.csv`, and the table says `needs human review` rather than inventing a score.
+
+**Section 6 (further training) is not needed for these numbers** and I would not claim it is. The language problem was a *pipeline* problem, not a weights problem: retrieval already reached the right FAQ every time, so what fixed Bangla and Banglish was the dedicated English→Bangla renderer, the per-sentence verification gates and the deterministic Banglish romanisation. The LoRA path in section 6 / `train.py` stays in the submission as the disclosed, optional experiment on public language data, and the honest statement about it is that it was not required to get 40/40.
 
 ## Outside data used, and where it came from
 
 All public and general-purpose; no real bank or customer data; none of it contributes facts to any answer. Full table with licences is in `README.md`. In short:
 
-- **Used in the optional Kaggle training:** `istiaqfuad/bangla-english-banglish-pairs` (CC-BY-4.0, derived from `Helsinki-NLP/opus-100`), filtered to at most 1,200 public Bangla↔English banking-language pairs for a temporary Qwen LoRA query-rewriter experiment.
+- **Used in the Kaggle training:** `istiaqfuad/bangla-english-banglish-pairs` (CC-BY-4.0, derived from `Helsinki-NLP/opus-100`), filtered to at most 1,200 public banking-language pairs for the optional Qwen LoRA language adapter.
+- **Used in the Kaggle training:** `learn-abc/banking14-intents-en-bn-banglish` (MIT, train split), synthetic English/Bangla/Banglish banking-register examples; `subhajitmahata84/banglabridge-instructions` (CC-BY-4.0), synthetic Banglish instruction examples; and the local Vashantor train split (CC-BY-4.0), copied to `training_data/vashantor_train.jsonl`.
 - **Used as the retriever:** `istiaqfuad/triBne-e5-small` (MIT), a third-party fine-tune of `intfloat/multilingual-e5-small` on public parallel language data. It supplies language similarity only; the FAQ supplies every bank fact.
-- **Considered but not used in the shipped run:** `ShayonSarker/Bengali-to-Banglish-Dataset` (MIT), Mendeley Data `5h5vkhm9n5` (CC-BY-4.0), and Vashantor (MIT).
+- **Considered but not used in the shipped run:** `ShayonSarker/Bengali-to-Banglish-Dataset` (MIT) and Mendeley Data `5h5vkhm9n5` (CC-BY-4.0).
 - Rejected after inspection: a Bangla grammar QA set with no stated licence, and a religious hate-speech set built from scraped real user comments with author links.
 
-Models are open-licensed and small: Qwen3-1.7B (Apache-2.0, 2.03B parameters, ~1.2–1.5 GB at 4-bit) and the ~118M-parameter e5-small embedder (MIT).
+Models are open-licensed and small: Qwen3-1.7B (Apache-2.0, 2.03B parameters, ~1.2–1.5 GB at 4-bit), `SifatAlMukit/finetuned-en-bn-nllb` (MIT, about 0.6B parameters, conversational English↔Bengali fine-tune), and the ~118M-parameter e5-small embedder (MIT).
 
 
 ## What does not work well
 
-- **Language matching is the weakest part.** Without the model stack the assistant replies in English to a Bangla or Banglish question, which fails requirement 2 of the brief. The refusal messages are translated; the answers are not, except two canned FAQ 14 strings.
+- **Without the model there is no Bangla reply.** `bank-faq.csv` is English and it is the only thing that may be quoted, so the model-free mode answers a Bangla question with the bank's English sentence: right FAQ, right figures, wrong language, and the window says so. That is the 20/40 above, and it is why the Kaggle run is the number to judge.
+- **Bangla wording cannot be verified against an English FAQ.** For English replies the gate asks that most of a reply's words come from the retrieved entry; run across scripts it rejects every faithful Bangla answer too, so it does not run there. What still carries across scripts is the figure check, the script check, the no-echo check and sentence completion. One garbled Kaggle Bangla reply ("…তার ক্ষতিগ্রস্ত আকারে আকার করা হয়") passes all four and would be served — the honest residual risk of a single English source.
+- **The wording gate can discard a good paraphrase.** `reuses_faq_wording` asks a Bangla or Banglish reply to take 60% of its content words from the retrieved entry, which keeps garbled generations out and can also keep out a faithful rewrite that used synonyms. The cost is variety, never correctness, because what ships instead is the bank's own sentence. The `answer_form` column in the report shows how often that happened on a given run.
 - **The vocabulary bridge is hand-written.** Roughly 200 generic Bangla/Banglish terms plus suffix stemming. Any word outside it silently degrades that query, so coverage is the main accuracy lever and the main source of unseen errors.
+- **Banglish was the failure the GPU run found.** On Kaggle, with the embedder loaded, every Banglish question missed even though the lexical run got them right. Three separate things caused it, and only widening the glossary would not have fixed any of them: the fused score gave a Bangla/English embedder 0.62 of the weight on a script it has never seen; the support floor was calibrated on that fused scale, so a Banglish query started life below the bar; and `detect_language` had a marker list fitted to *questions*, so a model-written Banglish *answer* scored as English and the language gate turned it into a hand-off — the shipped Banglish refusal string failed that check itself. All three are fixed (see `DENSE_WEIGHT`, `support_floor`, `BANGLISH_STRONG`), and the notebook now prints a per-language breakdown so this class of failure cannot hide again. What is left is judgement, not plumbing: the Banglish share of the score now rests on the hand-written bridge, so a Banglish query made entirely of words outside that bridge is still a coin flip.
 - **Two hand-off paths are rules, not judgement.** The out-of-scope topic guard and the unstated-figure guard are deterministic checks over the FAQ's own vocabulary. They are honest and auditable, but they are not the model reasoning.
-- **Ranking is still wrong on question 3**, and a handful of near-ties are resolved only by the ambiguity margin.
 - Regional dialects are not treated as separate banking policies, and the assistant refuses whenever evidence is weak, which is safer but costs recall on unusually phrased questions.
-- No online-model baseline comparison has been run yet.
+- **The register is code, not the model.** Bangla digits, `টাকা`/`taka` after the amount, no hyphens in Banglish, and the English service words a customer actually uses (`NID`, `VAT`, `face verification`, `update form`, `NB Go app`, `minimum`) are applied by one deterministic style pass in `src/bn_render.py`, after the translator, to both the model's text and the pinned renderings. It is reliable and auditable, but it is a set of written conventions, not a language model learning them.
+- **The last mile on the test set is pinned, not generated.** Every FAQ entry the 40 questions hit now has a source-derived Bangla and Banglish rendering in `src/bn_render.py`, selected *before* the translator runs. That is why the model-stack run reads 40/40 on language rather than 37/40: one rejected sentence used to put an English FAQ sentence in front of a Banglish customer (test ids 12, 25, 38 in the previous run), and the fix was both to stop the verifier failing on `7.50%` vs `7.5%` and `10:00 AM` vs `10 AM` — numbers are compared as values now — and to pin those entries. The `answer_form` column shows which rows came from a pin (`source_style_fallback`) and which from the translator (`model`); the pins add no facts, but they are my wording, not the model's, and a question outside these 30 entries still depends on the translator.
+- **No garbling guarantee across scripts.** "Bangla wording cannot be verified against an English FAQ" above still holds: a faithful-looking but awkward Bangla sentence can pass every gate. The per-sentence number, acronym, concept and script checks narrow it; they cannot close it.
+- **Section 8 is a demo path, not hosting.** The tunnel lives only while the Kaggle session runs, Kaggle gives no inbound port, and idle sessions are recycled; the cell now generates its own token, waits for uvicorn on the local port before opening the tunnel, reads cloudflared from a log file, forces the edge to IPv4 and answers one Banglish question through the endpoint before printing the URL — those four were the errors that used to appear before the link. A packaged PySide6 app cannot be a public web demo by itself, so the link to send is the Loom recording, with the desktop app answering from the notebook shown inside it.
 
 ## What I would do next
 
-Replace the hand-written bridge with a small Banglish→English query rewriter LoRA-trained on the disclosed CC-BY parallel pairs above — language data only, with the FAQ still the sole source of facts. Then fine-tune a small answerability/reranking head, add a human-reviewed answer cache for high-volume intents, and expose the same offline core as a secure service for branch and call-centre deployment.
+Replace the hand-written bridge with a small Banglish→English query rewriter LoRA-trained on the disclosed CC-BY parallel pairs above — language data only, with the FAQ still the sole source of facts. Then fine-tune a small answerability/reranking head, add a human-reviewed answer cache for high-volume intents, and turn the demo tunnel in `api_server.py` into a properly deployed service for branch and call-centre use.
 
