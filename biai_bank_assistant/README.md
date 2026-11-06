@@ -104,7 +104,7 @@ Flat is deliberate. `/kaggle/input` is read-only, so section 1 rebuilds the layo
 
 1. On Kaggle: **Create → Notebook**.
 2. Right-hand panel: **Input → + Add Input → Datasets**, search `biai-bank-assistant` (owner `mdabukawser`) → **Add**. The mount path becomes `/kaggle/input/biai-bank-assistant`.
-3. **Settings → Accelerator → GPU T4**, and **Internet → On** — the weights come from Hugging Face on the first run. If you intend to run section 7, add the secret `GEMINI_API_KEY` on the same panel.
+3. **Settings → Accelerator → GPU T4**, and **Internet → On** — the weights come from Hugging Face on the first run. If you intend to run section 7, add the secret `GEMINI_API_KEY` as in the next block.
 4. Clone the repo and copy `notebooks/kaggle.ipynb` into that notebook — **File → New Notebook → Import notebook from local file** does it in one step:
 
    ```bash
@@ -113,6 +113,21 @@ Flat is deliberate. `/kaggle/input` is read-only, so section 1 rebuilds the layo
 
    Section 1 finds the dataset by searching `/kaggle/input` for `requirements-kaggle.txt`, so no path is hardcoded; set `BIAI_KAGGLE_DATASET` only if you rename the dataset.
 5. **Run All.** Section 1 prints `input files: [...]`; sections 2–3 assert the staged code, the renderer hook and the verification gates; section 5 prints the 40-question table that `kaggle8.json` records; section 8 prints the tunnel URL and the session token for the desktop app.
+
+### The Gemini API key, for section 7
+
+Section 7 is the brief's required comparison against an online model. The key is **never** in this repo, in the dataset or in the notebook — it lives in Kaggle's secret store and the cell reads it at run time with `UserSecretsClient`.
+
+1. Get a free key at **<https://aistudio.google.com/apikey>** (any Google account; the free tier covers the 40 calls easily).
+2. In the open notebook, use the right-hand panel: **Add-ons and Secrets** (older Kaggle UI: **Settings → Add-ons and Secrets**).
+3. Under **Secrets**, click **New Secret**, then
+   - **Name:** `GEMINI_API_KEY` — exactly this, uppercase, no spaces;
+   - **Value:** paste the key you copied;
+   - click **Create**.
+4. Turn **Internet** on in the same panel and run the section 7 cells. The first one prints `baseline model: gemini-3.5-flash-lite | key found: True`. If it prints `key found: False`, the name is misspelled or the secret was saved in a different Kaggle account; the section then prints the manual fallback instead of failing the run.
+5. To compare a different hosted model, add **Environment → Add Variable** `BIAI_BASELINE_MODEL` on the same panel — `gemini-2.0-flash` is shut down and the 2.5 family is retired, which is why the default is `gemini-3.5-flash-lite`.
+
+Only the 40 synthetic questions from `test-questions.csv` are ever sent. No FAQ text, no customer data, and nothing from that call is used to build an answer.
 
 ## Quick start — this machine alone
 
