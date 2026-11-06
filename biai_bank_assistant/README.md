@@ -25,7 +25,7 @@ Everything here is grounded in the pack's own files: `data/bank-faq.csv` is the 
 
 There is nothing to install on the laptop except PySide6. **A laptop CPU cannot write Bangla**, so the accurate answers come from the notebook's GPU stack over one HTTP tunnel. Every number in `kaggle8.json` (copied verbatim into `reports/offline_results.json`) was produced by the path below.
 
-1. **Start the model.** Open `notebooks/kaggle.ipynb` on Kaggle with the `biai-bank-assistant` dataset attached and the accelerator set to **GPU T4** (internet on). Run sections 1–5; section 5 prints the 40-question table.
+1. **Start the model.** Open `notebooks/kaggle.ipynb` on Kaggle with the [`biai-bank-assistant`](https://www.kaggle.com/datasets/mdabukawser/biai-bank-assistant) dataset attached (how to attach it is under **The Kaggle dataset** below) and the accelerator set to **GPU T4** (internet on). Run sections 1–5; section 5 prints the 40-question table.
 2. **Publish it.** Run **section 8**. It installs FastAPI, starts `api_server.py` on the GPU, answers one Banglish question through the endpoint so you can see the served text, opens a Cloudflare quick tunnel, and prints at the end:
 
    ```text
@@ -40,7 +40,8 @@ There is nothing to install on the laptop except PySide6. **A laptop CPU cannot 
    **Linux (bash/zsh)**
 
    ```bash
-   cd biai_bank_assistant
+   git clone https://github.com/Mayamoho/orthomnorthom.git
+   cd orthomnorthom/biai_bank_assistant
    python3 -m pip install -r requirements.txt          # PySide6 only
    BIAI_API_URL="https://<that-url>" BIAI_API_TOKEN="<printed token>" python3 main.py
    ```
@@ -48,7 +49,8 @@ There is nothing to install on the laptop except PySide6. **A laptop CPU cannot 
    **macOS (Terminal)**
 
    ```bash
-   cd biai_bank_assistant
+   git clone https://github.com/Mayamoho/orthomnorthom.git
+   cd orthomnorthom/biai_bank_assistant
    python3 -m pip install -r requirements.txt
    export BIAI_API_URL="https://<that-url>"
    export BIAI_API_TOKEN="<printed token>"
@@ -58,7 +60,8 @@ There is nothing to install on the laptop except PySide6. **A laptop CPU cannot 
    **Windows (PowerShell)**
 
    ```powershell
-   cd biai_bank_assistant
+   git clone https://github.com/Mayamoho/orthomnorthom.git
+   cd orthomnorthom/biai_bank_assistant
    py -3 -m pip install -r requirements.txt            # PySide6 only
    $env:BIAI_API_URL   = "https://<that-url>"
    $env:BIAI_API_TOKEN = "<printed token>"
@@ -78,12 +81,46 @@ There is nothing to install on the laptop except PySide6. **A laptop CPU cannot 
 
    A `LOCAL FAQ` pill means the token was wrong or the tunnel died: the window says so and keeps answering from the FAQ on the machine, so the demo never becomes a blank box. Re-run section 8 and copy the new values.
 
+## The Kaggle dataset
+
+**<https://www.kaggle.com/datasets/mdabukawser/biai-bank-assistant>** is the input the notebook reads. Its files are uploaded **flat** — one level, no folders — exactly as the dataset page lists them:
+
+| Uploaded file | What it is |
+|---|---|
+| `bank-faq.csv` | the only source of facts: 30 entries, byte-identical to the pack |
+| `test-questions.csv` | the held-out 40 questions, evaluation only, never trained on |
+| `__init__.py`, `assistant.py`, `retrieval.py`, `normalize.py`, `generator.py`, `models.py`, `data.py`, `remote.py` | the pipeline. `__init__.py` installs the Bangla/Banglish renderer hook; `remote.py` is the client the desktop app uses against a GPU endpoint |
+| `bn_render.py` | the English→Bangla translator, the per-sentence verifier, the deterministic Banglish transliterator and the register pass |
+| `main.py`, `main_window.py`, `theme.py` | the PySide6 desktop app |
+| `api_server.py` | the FastAPI endpoint that section 8 serves |
+| `evaluate.py`, `kaggle_demo.py` | the 40-question run, and the headless demo |
+| `train.py`, `vashantor_train.jsonl`, `vashantor_train.metadata.json` | the optional adapter path; the two Vashantor files are train-only public language data (CC-BY-4.0) |
+| `requirements-kaggle.txt` | what section 1 installs, and the marker the notebook uses to locate the dataset |
+| `README.md`, `ONE_PAGE_NOTE.md` | this documentation |
+
+Flat is deliberate. `/kaggle/input` is read-only, so section 1 rebuilds the layout the code expects — `src/`, `data/`, `ui/`, `training_data/`, `reports/` — under `/kaggle/working/nb_assist`, and asserts each piece exists. A missing or stale file therefore stops in that cell instead of scoring quietly worse.
+
+### Use the dataset in a notebook
+
+1. On Kaggle: **Create → Notebook**.
+2. Right-hand panel: **Input → + Add Input → Datasets**, search `biai-bank-assistant` (owner `mdabukawser`) → **Add**. The mount path becomes `/kaggle/input/biai-bank-assistant`.
+3. **Settings → Accelerator → GPU T4**, and **Internet → On** — the weights come from Hugging Face on the first run. If you intend to run section 7, add the secret `GEMINI_API_KEY` on the same panel.
+4. Clone the repo and copy `notebooks/kaggle.ipynb` into that notebook — **File → New Notebook → Import notebook from local file** does it in one step:
+
+   ```bash
+   git clone https://github.com/Mayamoho/orthomnorthom.git
+   ```
+
+   Section 1 finds the dataset by searching `/kaggle/input` for `requirements-kaggle.txt`, so no path is hardcoded; set `BIAI_KAGGLE_DATASET` only if you rename the dataset.
+5. **Run All.** Section 1 prints `input files: [...]`; sections 2–3 assert the staged code, the renderer hook and the verification gates; section 5 prints the 40-question table that `kaggle8.json` records; section 8 prints the tunnel URL and the session token for the desktop app.
+
 ## Quick start — this machine alone
 
 **Linux (bash/zsh)**
 
 ```bash
-cd biai_bank_assistant
+git clone https://github.com/Mayamoho/orthomnorthom.git
+cd orthomnorthom/biai_bank_assistant
 python3 -m pip install -r requirements.txt      # PySide6 only, for the UI
 python3 main.py
 ```
@@ -91,7 +128,8 @@ python3 main.py
 **macOS (Terminal)**
 
 ```bash
-cd biai_bank_assistant
+git clone https://github.com/Mayamoho/orthomnorthom.git
+cd orthomnorthom/biai_bank_assistant
 python3 -m pip install -r requirements.txt
 python3 main.py
 ```
@@ -99,7 +137,8 @@ python3 main.py
 **Windows (PowerShell)**
 
 ```powershell
-cd biai_bank_assistant
+git clone https://github.com/Mayamoho/orthomnorthom.git
+cd orthomnorthom/biai_bank_assistant
 py -3 -m pip install -r requirements.txt
 py -3 main.py
 ```
