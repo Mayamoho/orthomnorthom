@@ -21,7 +21,64 @@ Everything here is grounded in the pack's own files: `data/bank-faq.csv` is the 
 
 **One answer source, and it is the supplied file.** The pack says `bank-faq.csv` "is the only source your assistant may answer from", so it is stored byte-identical to the pack, `test-questions.csv` is untouched, and there is no third data file of prepared Bangla answers — a file of answer text would be a second source, however faithful. Retrieval indexes the FAQ's own `topic`, `question` and `answer`; a Bangla or Banglish reply is *written* by the model from that English sentence, which is what requirements 2 and 3 of the brief ask for together.
 
-## Quick start
+## Run it — the Kaggle GPU answers, the desktop app shows it
+
+There is nothing to install on the laptop except PySide6. **A laptop CPU cannot write Bangla**, so the accurate answers come from the notebook's GPU stack over one HTTP tunnel. Every number in `kaggle8.json` (copied verbatim into `reports/offline_results.json`) was produced by the path below.
+
+1. **Start the model.** Open `notebooks/kaggle.ipynb` on Kaggle with the `biai-bank-assistant` dataset attached and the accelerator set to **GPU T4** (internet on). Run sections 1–5; section 5 prints the 40-question table.
+2. **Publish it.** Run **section 8**. It installs FastAPI, starts `api_server.py` on the GPU, answers one Banglish question through the endpoint so you can see the served text, opens a Cloudflare quick tunnel, and prints at the end:
+
+   ```text
+   BIAI_API_URL=https://<random-words>.trycloudflare.com
+   BIAI_API_TOKEN=<a token the cell generated for this session>
+   python3 main.py   ← the exact line to run, with both values already filled in
+   ```
+
+   Copy both values **exactly as printed**. The token is not typed by you and it is not from any token-generator website: `api_server.py` compares the `Authorization` header against the token that same cell generated, so any other value is a `401`. The URL lives only while the notebook session runs.
+3. **Run the desktop app against it.** Three commands on every machine; only how you set the two variables differs. Use `python3` (Linux/macOS) or `py -3` (Windows) — never a bare `python`, which on some machines is still Python 2.
+
+   **Linux (bash/zsh)**
+
+   ```bash
+   cd biai_bank_assistant
+   python3 -m pip install -r requirements.txt          # PySide6 only
+   BIAI_API_URL="https://<that-url>" BIAI_API_TOKEN="<printed token>" python3 main.py
+   ```
+
+   **macOS (Terminal)**
+
+   ```bash
+   cd biai_bank_assistant
+   python3 -m pip install -r requirements.txt
+   export BIAI_API_URL="https://<that-url>"
+   export BIAI_API_TOKEN="<printed token>"
+   python3 main.py
+   ```
+
+   **Windows (PowerShell)**
+
+   ```powershell
+   cd biai_bank_assistant
+   py -3 -m pip install -r requirements.txt            # PySide6 only
+   $env:BIAI_API_URL   = "https://<that-url>"
+   $env:BIAI_API_TOKEN = "<printed token>"
+   py -3 main.py
+   ```
+
+   On Windows Git Bash use the Linux form with `python3`.
+
+4. **Test it — the four checks.**
+
+   | Type this | Expect |
+   |---|---|
+   | `Card er PIN bhule gechi, reset korbo kibhabe?` | the same Banglish text section 8 printed |
+   | `আমার কার্ড হারিয়ে গেছে, এখন কী করব?` | Bangla script, Bangla digits, `৩০০ টাকা` |
+   | `What is today's dollar to taka exchange rate?` | `I don't know, let me connect you to a person.` |
+   | status pill / inspector | `MODEL READY — KAGGLE`, retrieval `dense`, Qwen generator named |
+
+   A `LOCAL FAQ` pill means the token was wrong or the tunnel died: the window says so and keeps answering from the FAQ on the machine, so the demo never becomes a blank box. Re-run section 8 and copy the new values.
+
+## Quick start — this machine alone
 
 **Linux (bash/zsh)**
 
@@ -49,7 +106,7 @@ py -3 main.py
 
 On Windows Git Bash use the Linux form with `python3`. Never a bare `python`, which on some machines is still Python 2.
 
-Without `torch` the app runs in **SMOKE TEST** mode: it still answers and still refuses correctly, but it replies in the FAQ's own language because there is no model on that machine to rewrite it — the honest cost of running without weights is 20/40 on reply language, with everything else unchanged. The judged run is the GPU one in `notebooks/kaggle.ipynb`, whose numbers this file reports.
+Without `torch` the app runs in **SMOKE TEST** mode: it still answers and still refuses correctly, but it replies in the FAQ's own language because there is no model on that machine to rewrite it — the honest cost of running without weights is 20/40 on reply language, with everything else unchanged. The numbers this file reports come from the tunnel path above.
 
 | Variable | Effect |
 |---|---|
@@ -60,14 +117,9 @@ Without `torch` the app runs in **SMOKE TEST** mode: it still answers and still 
 | `BIAI_ADAPTER_PATH` | load the adapter produced by `train.py` |
 | `BIAI_API_URL` + `BIAI_API_TOKEN` | drive the UI against a GPU endpoint instead of this machine's copy; the app says which backend answered |
 
-### Try these four questions
+### What this mode shows
 
-| Type | You should see |
-|---|---|
-| `What is today's dollar to taka exchange rate?` | `I don't know, let me connect you to a person.` |
-| `আমার কার্ড হারিয়ে গেছে, এখন কী করব?` | Bangla script, Bangla digits, `… ৩০০ টাকা …` |
-| `Card er PIN bhule gechi, reset korbo kibhabe?` | Banglish, Latin digits, no stray hyphens |
-| `Personal loan pete hole ki ki lagbe?` | the eligibility list, with `minimum` and `monthly income` kept in English |
+The same four questions from step 4 still work here, and the FAQ source, the hand-offs and the grounding checks are identical. What differs is the language column: with no model loaded, `আমার কার্ড হারিয়ে গেছে, এখন কী করব?` comes back as the bank's own English sentence, because the English FAQ is the only thing that may be quoted and there is nothing here to rewrite it. Run it against the tunnel instead and the same question arrives in Bangla script with Bangla digits — which is the reply the register rules in `src/bn_render.py` produce, including `minimum` and `monthly income` kept in English on a Banglish line.
 
 ## How I tested it
 
