@@ -36,22 +36,47 @@ was produced by the path below.
    ```text
    BIAI_API_URL=https://<random-words>.trycloudflare.com
    BIAI_API_TOKEN=<a token the cell generated for this session>
-   python main.py   ← the exact line to run, with both values already filled in
+   python3 main.py   ← the exact line to run, with both values already filled in
    ```
 
    Copy both values **exactly as printed**. The token is not typed by you and it
    is not from any token-generator website: `api_server.py` compares the
    `Authorization` header against the token that same cell generated, so any
    other value is a `401`. The URL lives only while the notebook session runs.
-3. **Run the desktop app against it.**
+3. **Run the desktop app against it.** Three commands on every machine; only how
+   you set the two variables differs. Use `python3` (Linux/macOS) or `py -3`
+   (Windows) — never a bare `python`, which on some machines is still Python 2.
+
+   **Linux (bash/zsh)**
 
    ```bash
    cd biai_bank_assistant
-   pip install -r requirements.txt   # PySide6 only
-   BIAI_API_URL=https://<that-url> BIAI_API_TOKEN=<the token the cell printed> python main.py
+   python3 -m pip install -r requirements.txt          # PySide6 only
+   BIAI_API_URL="https://<that-url>" BIAI_API_TOKEN="<printed token>" python3 main.py
    ```
 
-   Windows PowerShell: `env BIAI_API_URL="…" ; env BIAI_API_TOKEN="…" ; python main.py`.
+   **macOS (Terminal — same as Linux, or export the variables first)**
+
+   ```bash
+   cd biai_bank_assistant
+   python3 -m pip install -r requirements.txt
+   export BIAI_API_URL="https://<that-url>"
+   export BIAI_API_TOKEN="<printed token>"
+   python3 main.py
+   ```
+
+   **Windows (PowerShell)**
+
+   ```powershell
+   cd biai_bank_assistant
+   py -3 -m pip install -r requirements.txt            # PySide6 only
+   $env:BIAI_API_URL   = "https://<that-url>"
+   $env:BIAI_API_TOKEN = "<printed token>"
+   py -3 main.py
+   ```
+
+   On Windows Git Bash use the Linux form with `python3`.
+
 4. **Test it — the four checks.**
 
    | Type this | Expect |
@@ -66,14 +91,14 @@ was produced by the path below.
    becomes a blank box. Re-run section 8 and copy the new values.
 5. **Optional:** set `BIAI_ADAPTER_PATH` to the adapter saved by section 6 before
    starting section 8 if you want the trained adapter served. The reproducible
-   training command is `python train.py --faq data/bank-faq.csv --output
+   training command is `python3 train.py --faq data/bank-faq.csv --output
    /path/to/adapter` — it never opens `data/test-questions.csv`, and it is not
    required for the numbers above.
 
 
 ## Run modes — reference, not the judged path
 
-`python main.py` on a machine without `torch`/`sentence-transformers` runs in **lexical smoke-test mode**: the embedding model and the generator are both absent, the UI pill says `SMOKE TEST`, and the inspector names the missing dependency.
+`python3 main.py` on a machine without `torch`/`sentence-transformers` runs in **lexical smoke-test mode**: the embedding model and the generator are both absent, the UI pill says `SMOKE TEST`, and the inspector names the missing dependency.
 
 Smoke-test mode is grounded and it refuses correctly, but it answers in the FAQ's language: `bank-faq.csv` is English, nothing else may be quoted, so a Bangla question gets the bank's English sentence and the window says so plainly. Requirement 2 is the model's job, not the disk's. On the lexical stack the held-out set scores 30/30 on the FAQ source, 10/10 on the hand-offs, 40/40 on "no echo, complete sentence" — and 20/40 on reply language, which is the honest cost of running without a model.
 
@@ -82,7 +107,7 @@ Set `BIAI_DISABLE_DENSE=1` to force the lexical path even where the models are i
 ## Run the evaluation
 
 ```bash
-python evaluate.py
+python3 evaluate.py
 ```
 
 The test questions remain evaluation-only. `reports/offline_results.json` records the expected FAQ source, refusal status, language, confidence, and latency for each question.
@@ -123,7 +148,7 @@ Everything else in the dataset is already current. The full set the notebook exp
 
 Section 3 of the notebook fails loudly if the staged `src/` predates these gates, so an accidentally stale upload is a red cell rather than a quietly worse run.
 
-Locally, `python kaggle_demo.py` still runs the headless evaluation, and `python main.py` opens the desktop interface.
+Locally, `python3 kaggle_demo.py` still runs the headless evaluation, and `python3 main.py` opens the desktop interface.
 
 ## Connect the Kaggle model to the PySide6 desktop app (mandatory path)
 
@@ -134,7 +159,8 @@ The desktop app and the notebook call the same surface — `answer(question) -> 
 
 ```bash
 cd biai_bank_assistant
-BIAI_API_URL=https://<that-url> BIAI_API_TOKEN=<the token the cell printed> python main.py
+# Linux/macOS — full step-by-step, with the Windows and macOS forms, is step 3 above
+BIAI_API_URL="https://<that-url>" BIAI_API_TOKEN="<printed token>" python3 main.py
 ```
 
 The pill reads `MODEL READY — KAGGLE` and the inspector names the endpoint's retrieval mode and generator, so the chat window is showing the notebook's `kaggle8.json` answers rather than the laptop's English FAQ copy. A wrong or missing token is a 401; a dead tunnel is not an error dialog — the window says the endpoint was unreachable and keeps answering from the FAQ on the machine. Set `BIAI_ADAPTER_PATH` on the laptop only if you also ran section 6 and want the server to serve that adapter.

@@ -70,7 +70,7 @@ Screen: section 5 output table in the notebook, then `ONE_PAGE_NOTE.md` results 
 
 > "Same surface, two backends. Section 8 serves the GPU stack over FastAPI, opens
 > a Cloudflare tunnel and prints the token and URL; on the laptop,
-> `BIAI_API_URL=… python main.py` and the pill says MODEL READY — KAGGLE. The
+> `BIAI_API_URL=… python3 main.py` and the pill says MODEL READY — KAGGLE. The
 > window answers a Banglish question with the exact reply from the run. If the
 > tunnel dies, it says so and keeps answering from the local FAQ — a dead
 > connection is not a blank box.
