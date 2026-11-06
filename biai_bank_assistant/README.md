@@ -129,6 +129,8 @@ Section 7 is the brief's required comparison against an online model. The key is
 
 Only the 40 synthetic questions from `test-questions.csv` are ever sent. No FAQ text, no customer data, and nothing from that call is used to build an answer.
 
+**The free-tier limit is 15 requests per minute per model**, so an unpaced loop over 40 questions returns 15 answers and 25 `429 RESOURCE_EXHAUSTED` errors — that is what the first run of `baseline_results.csv` did. The section 7 cell now spaces calls 4.5 s apart, sleeps the `retryDelay` the API reports, and keeps whatever is already in `reports/baseline_results.csv`, so re-running it fetches only the failed rows. Everything stays free: same free key, same free model, roughly three minutes. The comparison cell prints all 40 questions side by side (offline answer vs the hosted model's reply) and saves the table to `reports/baseline_comparison.md`.
+
 ## Quick start — this machine alone
 
 **Linux (bash/zsh)**
