@@ -17,27 +17,67 @@ NB Assist is a local-first FAQ assistant for the BIAI AI Engineer Round 2 Task 2
 - **One answer source, and it is the supplied file.** The pack says `bank-faq.csv` "is the only source your assistant may answer from", so it is stored byte-identical to the pack, `test-questions.csv` is untouched, and there is no third data file of prepared Bangla answers — a file of answer text would be a second source, however faithful. Retrieval indexes the FAQ's own `topic`, `question` and `answer`; a Bangla or Banglish reply is *written* by the local model from that English sentence, which is what requirement 2 and requirement 3 of the brief ask for together.
 - A two-holder joint-account question is answered from FAQ 14; unsupported or contradictory requests are handed off.
 
-## Run modes — read this before judging the demo
+## Run it — required path: the Kaggle GPU answers, the desktop app shows it
+
+There is nothing to install on the laptop except PySide6. **A laptop CPU cannot
+write Bangla**, so a local-only run is a smoke test, not the submission: the
+accurate answers come from the notebook's GPU stack over one HTTP tunnel. Every
+number in `kaggle8.json` (copied verbatim into `reports/offline_results.json`)
+was produced by the path below.
+
+1. **Start the model.** Open `notebooks/kaggle_demo.ipynb` on Kaggle with the
+   `biai-bank-assistant` dataset attached and the accelerator set to **GPU T4**
+   (internet on). Run sections 1–5; section 5 prints the 40-question table.
+2. **Publish it.** Run **section 8**. It installs FastAPI, starts
+   `api_server.py` on the GPU, answers one Banglish question through the
+   endpoint so you can see the served text, opens a Cloudflare quick tunnel, and
+   prints at the end:
+
+   ```text
+   BIAI_API_URL=https://<random-words>.trycloudflare.com
+   BIAI_API_TOKEN=<a token the cell generated for this session>
+   python main.py   ← the exact line to run, with both values already filled in
+   ```
+
+   Copy both values **exactly as printed**. The token is not typed by you and it
+   is not from any token-generator website: `api_server.py` compares the
+   `Authorization` header against the token that same cell generated, so any
+   other value is a `401`. The URL lives only while the notebook session runs.
+3. **Run the desktop app against it.**
+
+   ```bash
+   cd biai_bank_assistant
+   pip install -r requirements.txt   # PySide6 only
+   BIAI_API_URL=https://<that-url> BIAI_API_TOKEN=<the token the cell printed> python main.py
+   ```
+
+   Windows PowerShell: `env BIAI_API_URL="…" ; env BIAI_API_TOKEN="…" ; python main.py`.
+4. **Test it — the four checks.**
+
+   | Type this | Expect |
+   |---|---|
+   | `Card er PIN bhule gechi, reset korbo kibhabe?` | the same Banglish text section 8 printed |
+   | `আমার কার্ড হারিয়ে গেছে, এখন কী করব?` | Bangla script, Bangla digits, `৩০০ টাকা` |
+   | `What is today's dollar to taka exchange rate?` | `I don't know, let me connect you to a person.` |
+   | status pill / inspector | `MODEL READY — KAGGLE`, retrieval `dense`, Qwen generator named |
+
+   A `LOCAL FAQ` pill means the token was wrong or the tunnel died: the window
+   says so and keeps answering from the FAQ on the machine, so the demo never
+   becomes a blank box. Re-run section 8 and copy the new values.
+5. **Optional:** set `BIAI_ADAPTER_PATH` to the adapter saved by section 6 before
+   starting section 8 if you want the trained adapter served. The reproducible
+   training command is `python train.py --faq data/bank-faq.csv --output
+   /path/to/adapter` — it never opens `data/test-questions.csv`, and it is not
+   required for the numbers above.
+
+
+## Run modes — reference, not the judged path
 
 `python main.py` on a machine without `torch`/`sentence-transformers` runs in **lexical smoke-test mode**: the embedding model and the generator are both absent, the UI pill says `SMOKE TEST`, and the inspector names the missing dependency.
 
 Smoke-test mode is grounded and it refuses correctly, but it answers in the FAQ's language: `bank-faq.csv` is English, nothing else may be quoted, so a Bangla question gets the bank's English sentence and the window says so plainly. Requirement 2 is the model's job, not the disk's. On the lexical stack the held-out set scores 30/30 on the FAQ source, 10/10 on the hand-offs, 40/40 on "no echo, complete sentence" — and 20/40 on reply language, which is the honest cost of running without a model.
 
 Set `BIAI_DISABLE_DENSE=1` to force the lexical path even where the models are installed, and `BIAI_GENERATION_MODEL` / `BIAI_EMBEDDING_MODEL` to use others. `BIAI_TRANSLATOR_MODEL` can select another compatible English-to-Bangla seq2seq checkpoint; the default is `SifatAlMukit/finetuned-en-bn-nllb`. `BIAI_MAX_NEW_TOKENS` raises the Qwen answer budget and `BIAI_RENDER_MAX_NEW_TOKENS` raises the translation budget.
-
-## Run locally
-
-```bash
-cd biai_bank_assistant
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-python main.py
-```
-
-This starts the PySide6 interface in lightweight smoke-test mode. To enable the local model stack, install `requirements-kaggle.txt` on a GPU machine (or install its packages selectively on a larger local environment). The first model-backed response downloads the configured local models. Set `BIAI_DISABLE_DENSE=1` if you want to run only the lightweight lexical smoke test. Set `BIAI_GENERATION_MODEL`, `BIAI_EMBEDDING_MODEL`, and (after training) `BIAI_ADAPTER_PATH` to use another local model or LoRA adapter.
-
-The reproducible training command is `python train.py --faq data/bank-faq.csv --output /path/to/adapter`. It uses the FAQ plus the disclosed public bilingual corpus and never opens `data/test-questions.csv`. The adapter is loaded by the Qwen answer-writer when `BIAI_ADAPTER_PATH` is set; it does not change the dedicated translation checkpoint. One optional banking-intent source is gated on Hugging Face; `train.py` skips it automatically when no `HF_TOKEN` is available, so training continues from the ungated sources and the local Vashantor copy.
 
 ## Run the evaluation
 
