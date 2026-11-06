@@ -1,0 +1,41 @@
+id,question,answer,expected_unknown,handed_off,refusal_correct,language,invented_figures,latency_ms,mode
+1,Personal loan er interest rate koto?,The interest rate is 12% per year on a reducing balance.,False,False,True,banglish,[],546.5622820011049,faq
+2,When will my BEFTN transfer reach the other bank?,"A BEFTN transfer is credited by the next working day, as long as it is sent before 3:00 PM.",False,False,True,en,[],860.837628999434,faq
+3,"Amar account theke ekta transaction ami korini, kothay janabo?",Report it within 30 days by calling 16999 or visiting your branch.,False,False,True,banglish,[],597.1931830008543,faq
+4,What happens if I break my FDR early?,"If you encash early, interest is paid at the savings account rate of 4% per year from the deposit date, and the FDR rate no longer applies.",False,False,True,en,[],447.3138069988636,faq
+5,What is the late payment fee on a credit card?,A flat late payment fee of BDT 500 applies if you miss the due date.,False,False,True,en,[],478.090180999061,faq
+6,ক্রেডিট কার্ডের বিল কবে দিতে হয়?,আপনার স্টেটমেন্ট প্রতি মাসের ৫ তারিখে তৈরি হয় এবং একই মাসের ২৫ তারিখের মধ্যে বিল পরিশোধ করতে হবে।,False,False,True,bn,[],662.6937149994774,faq
+7,Ek din e koto taka transfer kora jay?,Transfers to Nirbhor Bank accounts: up to BDT 10 lakh per day. Transfers to other banks through BEFTN: up to BDT 5 lakh per day. RTGS transfers start from BDT 1 lakh.,False,False,True,banglish,[],647.049564999179,faq
+8,How can I get a bank statement for the last six months?,The last 6 months of statements are free in the NB Go app.,False,False,True,en,[],549.1149890003726,faq
+9,এসএমএস অ্যালার্টের জন্য কত চার্জ?,"SMS alerts cost a flat BDT 120 per year, charged to your account.",False,False,True,bn,[],978.169723000974,faq
+10,চেক বই পেতে কত দিন লাগে?,৩ কার্যদিবস,False,False,True,bn,[],517.6468429999659,faq
+11,Will you waive the interest on my loan because my business made a loss?,HANDOFF,True,True,True,en,[],455.6066519999149,faq
+12,FDR korte minimum koto taka lage?,"Minimum BDT 25,000.",False,False,True,banglish,[],632.1082059985201,faq
+13,আমার বন্ধুর অ্যাকাউন্টে কত টাকা আছে বলুন তো?,HANDOFF,True,True,True,bn,[],455.0391270004184,faq
+14,এটিএম থেকে দিনে সর্বোচ্চ কত টাকা তোলা যায়?,"আপনি প্রতি কার্ডে দিনে সর্বোচ্চ ৫০,০০০ টাকা তুলতে পারবেন।",False,False,True,bn,[],617.7275539994298,faq
+15,Can I open a joint account with my spouse?,"Yes. A joint account can have up to 2 holders, and both holders must sign the account opening documents.",False,False,True,en,[],846.4098969998304,faq
+16,What documents do I need to open a savings account?,"You need your NID or passport, two passport-size photos, and nominee details. A TIN certificate is optional. The minimum opening deposit is BDT 500.",False,False,True,en,[],545.8612980000908,faq
+17,Cheque er payment ta stop korbo kibhabe?,Submit a written stop-payment request at your branch. The fee is BDT 100 per cheque.,False,False,True,banglish,[],497.9069660003006,faq
+18,আজকের স্বর্ণের দাম কত?,HANDOFF,True,True,True,bn,[],877.3494699998992,faq
+19,আপনাদের সিঙ্গাপুরে কোনো শাখা আছে কি?,HANDOFF,True,True,True,bn,[],501.37605700001586,faq
+20,সেভিংস অ্যাকাউন্টে সর্বনিম্ন কত টাকা রাখতে হবে?,"সেভিংস অ্যাকাউন্টে গড় মাসিক ব্যালেন্স BDT 1,000 রাখতে হবে।",False,False,True,bn,[],633.6038999997982,faq
+21,Do you offer cryptocurrency trading accounts?,HANDOFF,True,True,True,en,[],485.3012759995181,faq
+22,পার্সোনাল লোনের জন্য কী যোগ্যতা লাগে?,"আপনাকে বয়স ২৫ থেকে ৬০ বছরের মধ্যে হতে হবে, ন্যূনতম ৩০,০০০ টাকা মাসিক বেতনের চাকরিজীবী হতে হবে এবং বর্তমান চাকরিতে অন্তত ১ বছর সময় থাকতে হবে। সর্বোচ্চ লোন হলো ১০ লাখ টাকা।",False,False,True,bn,[],551.6569309984334,faq
+23,Debit card er annual fee koto?,The first year is free. From the second year the annual fee is BDT 500.,False,False,True,banglish,[],523.1054069990932,faq
+24,"Card er PIN bhule gechi, reset korbo kibhabe?","Open the NB Go app, go to Settings, then Card, then Reset PIN. You can also reset it at any Nirbhor Bank ATM using an OTP sent to your registered number.",False,False,True,banglish,[],642.0394310007396,faq
+25,Branch gulo kon din kon shomoy khola thake?,"Branches are open Sunday to Thursday, 10:00 AM to 4:00 PM. They are closed on Friday and Saturday and on government holidays.",False,False,True,banglish,[],565.2516250011104,faq
+26,নমিনি পরিবর্তন করতে কী লাগবে?,Submit a nominee change form at your branch with the new nominee's NID and photo. Both the account holder and the nominee must sign.,False,False,True,bn,[],779.5728130004136,faq
+27,"আমার কার্ড হারিয়ে গেছে, এখন কী করব?",আপনার কার্ড হারিয়ে বা চুরি হয়ে গেলে অবিলম্বে ২৪-ঘণ্টার হটলাইন 16999-এ কল করে কার্ডটি ব্লক করুন। ৭ কার্যদিবসের মধ্যে আপনার শাখা থেকে BDT 300 ফি দিয়ে একটি নতুন কার্ড সংগ্রহ করা যেতে পারে।,False,False,True,bn,[],775.8618579991889,faq
+28,How do I register for the NB Go mobile app?,"Download NB Go, choose Register, enter your account number and registered mobile number, then enter the OTP we send you and set a 6-digit passcode.",False,False,True,en,[],521.963176999634,faq
+29,Is there a fee to receive remittance from abroad?,Receiving remittance is free.,False,False,True,en,[],471.2497609998536,faq
+30,How much of the property value can I borrow for a home loan?,"You can borrow up to 70% of the property value, with a repayment period of up to 20 years.",False,False,True,en,[],417.3343359998398,faq
+31,Credit card nite hole income koto hote hobe?,"Monthly income of at least BDT 40,000",False,False,True,banglish,[],599.0849350000644,faq
+32,What is today's dollar to taka exchange rate?,HANDOFF,True,True,True,en,[],417.72071000013966,faq
+33,Apnader bank er share kinle labh hobe?,HANDOFF,True,True,True,banglish,[],511.54690099974687,faq
+34,"আমার মোবাইল নম্বর বদলাতে চাই, কীভাবে করব?","আপনার শাখা আপনার NID সহ ভিজিট করুন এবং আপডেট ফর্ম পূরণ করুন, অথবা ফেস ভেরিফিকেশনের পর NB Go অ্যাপে এটি আপডেট করুন।",False,False,True,bn,[],616.8211049989623,faq
+35,Account dormant hoye gele ki korte hobe?,Visit your branch with your NID and make a deposit to reactivate it.,False,False,True,banglish,[],512.8239040004701,faq
+36,Can you give me the phone number of the branch manager in Sylhet?,HANDOFF,True,True,True,en,[],510.254184000587,faq
+37,"Amar boyosh 17, ami ki student loan pabo?",HANDOFF,True,True,True,banglish,[],632.031070001176,faq
+38,KYC update koto bochor por por korte hoy?,KYC must be updated every 5 years.,False,False,True,banglish,[],452.02564200008055,faq
+39,আমার ব্যবসার জন্য ভিসা সহায়তা পাওয়া যাবে?,HANDOFF,True,True,True,bn,[],464.8661600003834,faq
+40,How do I close my account?,"Visit your branch with your NID and fill in the closure form. If the account is closed within 6 months of opening, a fee of BDT 500 applies.",False,False,True,en,[],494.1252459993848,faq

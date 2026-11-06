@@ -23,7 +23,7 @@ Everything here is grounded in the pack's own files: `data/bank-faq.csv` is the 
 
 ## Run it — the Kaggle GPU answers, the desktop app shows it
 
-There is nothing to install on the laptop except PySide6. **A laptop CPU cannot write Bangla**, so the accurate answers come from the notebook's GPU stack over one HTTP tunnel. Every number in `kaggle8.json` (copied verbatim into `reports/offline_results.json`) was produced by the path below.
+There is nothing to install on the laptop except PySide6. **A laptop CPU cannot write Bangla**, so the accurate answers come from the notebook's GPU stack over one HTTP tunnel. Every number in [`reports/offline_results.json`](reports/offline_results.json) was produced by the path below.
 
 1. **Start the model.** Open `notebooks/kaggle.ipynb` on Kaggle with the [`biai-bank-assistant`](https://www.kaggle.com/datasets/mdabukawser/biai-bank-assistant) dataset attached (how to attach it is under **The Kaggle dataset** below) and the accelerator set to **GPU T4** (internet on). Run sections 1–5; section 5 prints the 40-question table.
 2. **Publish it — ngrok, set up once.** Sign up free at **<https://dashboard.ngrok.com>** (Google, GitHub or a work email; no card). Then in the dashboard's left menu:
@@ -151,7 +151,7 @@ Flat is deliberate. `/kaggle/input` is read-only, so section 1 rebuilds the layo
    ```
 
    Section 1 finds the dataset by searching `/kaggle/input` for `requirements-kaggle.txt`, so no path is hardcoded; set `BIAI_KAGGLE_DATASET` only if you rename the dataset.
-5. **Run All.** Section 1 prints `input files: [...]`; sections 2–3 assert the staged code, the renderer hook and the verification gates; section 5 prints the 40-question table that `kaggle8.json` records; section 8.1 prints the permanent ngrok URL for the desktop app (section 8 is the no-account fallback).
+5. **Run All.** Section 1 prints `input files: [...]`; sections 2–3 assert the staged code, the renderer hook and the verification gates; section 5 prints the 40-question table and writes `reports/offline_results.json`; section 8.1 prints the permanent ngrok URL for the desktop app (section 8 is the no-account fallback).
 
 ### The Gemini API key, for section 7
 
@@ -170,7 +170,7 @@ Nothing from that call is used to build an answer, and no customer data is ever 
 
 **What the hosted model is given.** `BIAI_BASELINE_MODE` decides it, and the default is `faq`: the same retrieved `bank-faq.csv` entry and the same instruction the local generator gets — answer only from the entry, never add a number the entry does not state, reply `HANDOFF` when the entry does not answer. That makes the two columns differ by model, not by evidence. `no_faq` asks the hosted model as a generic assistant with no bank data; the first run used that and all 17 answers it obtained came back as the literal `HANDOFF`, including the 15 the FAQ covers — a fair result for a model with nothing to read, but not a comparison. Section 7 prints the mode in its header and only scores rows of the current mode, so a report cannot mix the two.
 
-**The free-tier limit is 15 requests per minute per model**, so an unpaced loop over 40 questions returns 15 answers and 25 `429 RESOURCE_EXHAUSTED` errors — that is what the first run of `baseline_results.csv` did. The section 7 cell now spaces calls 4.5 s apart, sleeps the `retryDelay` the API reports, and keeps whatever is already in `reports/baseline_results.csv` for the same mode, so re-running it fetches only the failed rows. Everything stays free: same free key, same free model, roughly three minutes. The comparison cell drops `ERROR` rows from the scoring, prints all 40 questions side by side (offline answer vs the hosted model's reply) and saves the table to `reports/baseline_comparison.md`.
+**The free-tier limit is 15 requests per minute per model**, so an unpaced loop over 40 questions returns 15 answers and 25 `429 RESOURCE_EXHAUSTED` errors — that is what the first run of `baseline_results.csv` did. The section 7 cell now spaces calls 4.5 s apart, sleeps the `retryDelay` the API reports, and keeps whatever is already in `reports/baseline_results.csv` for the same mode, so re-running it fetches only the failed rows. Everything stays free: same free key, same free model, roughly three minutes. The completed run is in `reports/baseline_results.csv` — **40/40 answers obtained, 0 rate-limited rows**, median 546 ms per call, all of them in `mode=faq`. The comparison cell drops `ERROR` rows from the scoring, prints all 40 questions side by side (offline answer vs the hosted model's reply) and saves the table to `reports/baseline_comparison.md`.
 
 ## Quick start — this machine alone
 
@@ -212,7 +212,7 @@ its 40 rows carries `id`, `question`, `status`, `source_id`, `language`, `answer
 `answer_form` (`model`, `source_style_fallback` or `faq_fallback`), `render_latency_ms` and `latency_ms`,
 and the header block says what the run was: `retrieval_mode: "dense"`, `generator_loaded: true`,
 `source_accuracy`/`refusal_accuracy`/`language_accuracy`/`overall_gate_accuracy` all `1.0`, median latency
-15.3 ms, p95 3172 ms.
+15.4 ms, p95 3301 ms.
 
 Two commands regenerate it, and they are the same two commands the notebook runs:
 
@@ -259,7 +259,7 @@ The same four questions from step 4 still work here, and the FAQ source, the han
 
 **Evaluation run** — `python3 evaluate.py` answers all 40 questions end to end and writes [`reports/offline_results.json`](reports/offline_results.json), the file committed in this repo and the one every number in this README and in `ONE_PAGE_NOTE.md` is read from. I read that file line by line rather than trusting the aggregate: 30/30 on the FAQ source, 10/10 on the hand-offs, language and latency per script, and for each row the `support_type`, the `answer_form` (model or fallback) and `rendered_by`. The English-leak cases in the run before this one were found exactly this way — a 27/30 headline still hides a sentence-level bug.
 
-**Manual testing** — `python3 main.py`, then by hand: all three scripts plus a mixed one, a hand-off question, a question citing a figure the FAQ contradicts, and the fallback path with the endpoint unreachable. Then `python3 api_server.py` locally with `curl` against `/health` and `/answer`, with and without the bearer token, to confirm a wrong token surfaces as a `401` rather than a silent fallback, and that the pill switches to `MODEL READY — KAGGLE` when the URL is right. On Kaggle, section 3 of the notebook re-runs the renderer, verifier and transliterator assertions against the staged copy, and section 5 prints the 40-question table that `kaggle8.json` records.
+**Manual testing** — `python3 main.py`, then by hand: all three scripts plus a mixed one, a hand-off question, a question citing a figure the FAQ contradicts, and the fallback path with the endpoint unreachable. Then `python3 api_server.py` locally with `curl` against `/health` and `/answer`, with and without the bearer token, to confirm a wrong token surfaces as a `401` rather than a silent fallback, and that the pill switches to `MODEL READY — KAGGLE` when the URL is right. On Kaggle, section 3 of the notebook re-runs the renderer, verifier and transliterator assertions against the staged copy, and section 5 prints the 40-question table and rewrites `reports/offline_results.json`.
 
 **What manual testing caught that the tests did not** — an unreadable question colour in the chat window, hyphens left inside Banglish words, `ত্রৈমাসিকে` reading as textbook rather than customer-facing Bangla, and a pile of errors when the serving cell was run a second time. Each one is now either an assertion above, a rule in `style_answer()`, or a guard in the notebook.
 
