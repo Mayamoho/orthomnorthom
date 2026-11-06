@@ -3,7 +3,7 @@ from __future__ import annotations
 from html import escape
 
 from PySide6.QtCore import QObject, Qt, QThread, Signal, Slot
-from PySide6.QtGui import QFont
+from PySide6.QtGui import QColor, QFont, QPalette
 from PySide6.QtWidgets import (
     QFrame, QGraphicsDropShadowEffect, QHBoxLayout, QLabel, QMainWindow, QPushButton, QSizePolicy,
     QTextEdit, QVBoxLayout, QWidget,
@@ -12,6 +12,21 @@ from PySide6.QtWidgets import (
 from src.assistant import BankAssistant
 from src.remote import RemoteAssistant
 from ui.theme import APP_QSS
+
+# Chat colours are inlined because QTextEdit rich text does not pick up the QSS.
+# Every value below is checked against the cream (#fffdf7) chat card: the darkest
+# accent on it is still above 7:1, so Bangla, Banglish and Latin render alike.
+INK = "#101010"
+SUBTLE_INK = "#4a4438"
+HANDOFF = "#a23a20"
+YOU_ACCENT = "#b9f35b"
+ROLE_ACCENT = INK
+ROLE_TEXT = "#fffdf7"
+
+
+def _role_tag(text: str, accent: str = ROLE_ACCENT, on: str = ROLE_TEXT) -> str:
+    return (f'<span style="background-color:{accent};color:{on};font-weight:900">'
+            f'&nbsp;{escape(text)}&nbsp;</span>')
 
 
 class AnswerWorker(QObject):
@@ -190,6 +205,9 @@ class MainWindow(QMainWindow):
         row = QHBoxLayout()
         self.composer = QTextEdit(objectName="composer")
         self.composer.setFixedHeight(72)
+        hint = self.composer.palette()
+        hint.setColor(QPalette.PlaceholderText, QColor(SUBTLE_INK))
+        self.composer.setPalette(hint)
         self.composer.setPlaceholderText("Write in English, বাংলা, or Banglish…")
         row.addWidget(self.composer, 1)
         self.send_button = QPushButton("Send  ↗", objectName="sendButton")
@@ -227,7 +245,11 @@ class MainWindow(QMainWindow):
 
     @staticmethod
     def _welcome_html() -> str:
-        return '<div style="color:#101010;font-weight:900">NB ASSIST / READY</div><div style="color:#252525;margin-top:6px">Hello. Ask me about Nirbhor Bank products and services. I answer only from the supplied FAQ.</div>'
+        return (
+            f'<div style="margin-top:6px">{_role_tag("NB ASSIST / READY", ROLE_ACCENT)}</div>'
+            f'<div style="margin-top:8px;color:{INK};font-size:15px">Hello. Ask me about Nirbhor '
+            'Bank products and services. I answer only from the supplied FAQ.</div>'
+        )
 
     def _set_question(self, text: str):
         self.composer.setPlainText(text)
@@ -237,7 +259,11 @@ class MainWindow(QMainWindow):
         question = self.composer.toPlainText().strip()
         if not question or self.thread is not None:
             return
-        self.chat_view.append(f'<div style="color:#95d9ff;margin-top:16px"><b>You</b><br>{escape(question)}</div>')
+        self.chat_view.append(
+            f'<div style="margin-top:18px">{_role_tag("You", YOU_ACCENT, INK)}</div>'
+            f'<div style="margin-top:6px;color:{INK};font-size:16px;font-weight:700">'
+            f'{escape(question)}</div>'
+        )
         self.send_button.setEnabled(False)
         self.send_button.setText("Thinking…")
         self.thread = QThread(self)
@@ -253,12 +279,16 @@ class MainWindow(QMainWindow):
 
     @Slot(object)
     def _received(self, result):
-        color = "#101010" if result.status == "answered" else "#a23a20"
-        bubble = f'<div style="color:{color};margin-top:16px"><b>NB Assist</b><br>{escape(result.answer)}</div>'
+        color = INK if result.status == "answered" else HANDOFF
+        bubble = (
+            f'<div style="margin-top:18px">{_role_tag("NB Assist", ROLE_ACCENT)}</div>'
+            f'<div style="margin-top:6px;color:{color};font-size:16px">{escape(result.answer)}</div>'
+        )
         draft = result.metadata.get("model_draft")
         if draft:
             bubble += (
-                f'<div style="color:#7a8598;margin-top:6px"><b>Draft the model wrote first</b>'
+                f'<div style="margin-top:8px;color:{SUBTLE_INK};font-size:14px">'
+                f'<span style="font-weight:900">Draft the model wrote first</span>'
                 f'<br>{escape(draft)}</div>'
             )
         self.chat_view.append(bubble)

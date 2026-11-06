@@ -1,202 +1,105 @@
 # NB Assist — Offline Bilingual Bank Assistant
 
-NB Assist is a local-first FAQ assistant for the BIAI AI Engineer Round 2 Task 2. It answers only from the supplied Nirbhor Bank FAQ and hands unsupported questions to a person. The interface is a PySide6 desktop application with English, Bangla, Banglish, and mixed-input support.
+NB Assist is a local-first FAQ assistant for BIAI AI Engineer Round 2, Task 2. It answers only from the supplied Nirbhor Bank FAQ and hands unsupported questions to a person. The interface is a PySide6 desktop app with English, Bangla, Banglish, and mixed-input support.
 
-## Design
+Everything here is grounded in the pack's own files: `data/bank-faq.csv` is the only source of facts, and the 40-question `data/test-questions.csv` is held out for testing and is never used for training or tuning.
 
-- Hybrid FAQ retrieval: IDF-weighted query coverage + character 4-gram overlap + a topic tie-break, with an optional multilingual embedding model.
-- Cross-script vocabulary bridge (`src/normalize.py`) maps generic Bangla and Banglish banking terms to English. It is scored as a second query representation and combined by `max`, so a gloss can raise a score but never dilute one.
-- Concept dedup (`informative_terms`): a Bangla word the glossary can translate is dropped when its English gloss is already in the query. Without this, the loan-interest entry beat the loan-eligibility entry by matching "পার্সোনাল লোনের" *and* "personal loan" as two separate facts.
-- Language-aware support gate: the embedder's share of the fused score depends on the script the customer used (`DENSE_WEIGHT`), and the floor is derived from that same blend, so every query is judged against a threshold calibrated for the channel that carries it. Banglish is the case that needs this — a Bangla/English embedder has never seen Roman-script Bangla, so there the glossary carries the query and dense is only a tiebreaker. Below the floor the assistant hands off rather than guesses.
-- Three groundedness guards, in order: retrieval floor, ambiguous-evidence margin, and two FAQ-derived checks — a topic the FAQ never mentions, or a figure that contradicts a range the FAQ states. The topic guard filters itself against the FAQ vocabulary, so it can only refuse what the corpus truly cannot answer. The ambiguity guard (`is_ambiguous`) calls a near-tie a coin flip only when the topic and lexical channels agree with the fused score, so `0.3592 vs 0.3589` no longer hands off a question that named the topic outright.
-- When the local generator loads, a strict entailment check may reject the retrieved FAQ, but its veto is honoured only when the lexical evidence is below the same floor the fused score had to clear. Its English-only prompt produces false NOs on Bangla and Banglish, and a false NO on a known FAQ is a real customer sent to a dead end.
-- Local Qwen3-1.7B generation when the model dependencies and weights are available for English answers and entailment checks. Bangla/Banglish replies normally use the dedicated `SifatAlMukit/finetuned-en-bn-nllb` English-to-Bangla seq2seq checkpoint; Banglish is deterministic romanisation of verified Bangla output. A small source-derived code fallback covers the FAQ entries whose neural output was mixed or unclear, so no English sentence is spliced into a customer reply.
-- Banglish romanisation is deterministic and zero-dependency: a Bengali-script lexicon handles banking terms and common suffixes, a phrase layer preserves customer-facing English such as `interest rate`, `balance`, `deposit`, `office`, `visit`, and `processing`, and the grapheme rules handle unknown words. There is no mathematically unique Banglish spelling for every Bengali word, so the renderer chooses one consistent Bangladesh-oriented style rather than claiming phonetic perfection.
-- Key-fact validation preserves amounts, percentages, dates, and hotline numbers (`1,000` and `1000` compare equal) and rejects a figure the entry does not state, so the PIN-reset reply that invented "Fee holo BDT 500" cannot ship. Where the entry states one or two figures those are the answer, so dropping them fails too; a seven-figure entry such as the FDR rates may be answered from one of them.
-- Three format gates on every model reply before it is served (`answer_is_wellformed`): it must not recite the customer's question, must finish its sentence, and must be in the customer's script. A reply that fails any of them is replaced by the bank's own sentence and the rejected draft stays visible in the window, rather than becoming an "I don't know". A fourth gate — that an *English* reply be built from this entry's own wording — catches model boilerplate; it cannot run on Bangla or Banglish, because the FAQ has no Bangla text to compare against.
-- **One answer source, and it is the supplied file.** The pack says `bank-faq.csv` "is the only source your assistant may answer from", so it is stored byte-identical to the pack, `test-questions.csv` is untouched, and there is no third data file of prepared Bangla answers — a file of answer text would be a second source, however faithful. Retrieval indexes the FAQ's own `topic`, `question` and `answer`; a Bangla or Banglish reply is *written* by the local model from that English sentence, which is what requirement 2 and requirement 3 of the brief ask for together.
-- A two-holder joint-account question is answered from FAQ 14; unsupported or contradictory requests are handed off.
+## What it does
 
-## Run it — required path: the Kaggle GPU answers, the desktop app shows it
+- Reads a question in English, Bangla, Banglish or mixed script, detects the script, and answers in that same script.
+- Retrieves the right FAQ entry with a hybrid scorer — IDF-weighted query coverage, character 4-gram overlap, a topic tie-break, and an optional multilingual embedding model — and only answers when the evidence clears a floor calibrated for the script the customer used. Banglish needs that: a Bangla/English embedder has never seen Roman-script Bangla, so there the cross-script glossary carries the query and dense similarity is only a tiebreaker.
+- Bridges scripts in `src/normalize.py`, which maps generic Bangla and Banglish banking terms to English. A gloss is scored as a second query representation and combined by `max`, so it can raise a score but never dilute one. Concepts are deduped (`informative_terms`): a Bangla word whose English gloss is already in the query is dropped, otherwise the loan-interest entry beat the loan-eligibility entry by matching "পার্সোনাল লোনের" *and* "personal loan" as two separate facts.
+- Refuses and offers a human hand-off on three groundedness guards: the retrieval floor, the ambiguous-evidence margin, and two FAQ-derived checks — a topic the FAQ never mentions, or a figure that contradicts a range the FAQ states. The topic guard filters itself against the FAQ's own vocabulary, so it can only refuse what the corpus truly cannot answer. The ambiguity guard (`is_ambiguous`) calls a near-tie a coin flip only when the topic and lexical channels agree with the fused score, so `0.3592 vs 0.3589` no longer hands off a question that named the topic outright.
+- Lets the local generator's entailment check veto a retrieved FAQ only when the lexical evidence is below the same floor the fused score had to clear. Its English-only prompt produces false NOs on Bangla and Banglish, and a false NO on a known FAQ is a real customer sent to a dead end.
+- Writes the Bangla reply with the dedicated `SifatAlMukit/finetuned-en-bn-nllb` checkpoint, one sentence at a time, and verifies each sentence against its English source before using it: same numbers, same acronyms, no concept the source does not contain, no foreign script, no loop, sane length. A sentence that fails is regenerated; if it still fails, the bank's own sentence is kept, so a reply is never invented and never empty. Qwen3-1.7B stays the answer writer for English and the entailment checker.
+- Produces Banglish by deterministic romanisation of that verified Bangla, because small models spell Bangla in Latin letters badly while spelling Bangla script well enough. There is no mathematically unique Banglish spelling for every Bengali word, so the renderer chooses one consistent Bangladesh-oriented style rather than claiming phonetic perfection.
+- Applies one register pass (`style_answer`) to what a customer actually reads: Bangla answers use Bengali digits and `টাকা` after the amount (`১০ লাখ টাকা`), Banglish keeps Latin digits and the English service terms the FAQ itself uses (`interest rate`, `NID`, `face verification`, `update form`, `minimum`), no hyphen is left hanging inside a Banglish word, and textbook forms give way to natural ones (`প্রতি তিন মাস পর পর`, `নমিনি`, `অ্যালার্ট`).
+- Preserves key facts on the way out: amounts, percentages, dates and hotline numbers survive (`1,000` and `1000` compare equal) and a figure the entry does not state is rejected, so the PIN-reset reply that invented "Fee holo BDT 500" cannot ship. Where the entry states one or two figures those *are* the answer, so dropping them fails too; a seven-figure entry such as the FDR rates may be answered from one of them.
+- Runs three format gates on every model reply before it is served (`answer_is_wellformed`): it must not recite the customer's question, must finish its sentence, must be in the customer's script. A reply that fails is replaced by the bank's own sentence and the rejected draft stays visible in the window instead of becoming an "I don't know". A fourth gate — that an *English* reply be built from this entry's own wording — catches model boilerplate; it cannot run on Bangla or Banglish, because the FAQ has no Bangla text to compare against.
+- Answers a two-holder joint-account question from FAQ 14, and hands off anything unsupported or contradictory.
+- Reports, for every one of the 40 questions, the FAQ source, refusal status, language, confidence and latency in `reports/offline_results.json`.
 
-There is nothing to install on the laptop except PySide6. **A laptop CPU cannot
-write Bangla**, so a local-only run is a smoke test, not the submission: the
-accurate answers come from the notebook's GPU stack over one HTTP tunnel. Every
-number in `kaggle8.json` (copied verbatim into `reports/offline_results.json`)
-was produced by the path below.
+**One answer source, and it is the supplied file.** The pack says `bank-faq.csv` "is the only source your assistant may answer from", so it is stored byte-identical to the pack, `test-questions.csv` is untouched, and there is no third data file of prepared Bangla answers — a file of answer text would be a second source, however faithful. Retrieval indexes the FAQ's own `topic`, `question` and `answer`; a Bangla or Banglish reply is *written* by the model from that English sentence, which is what requirements 2 and 3 of the brief ask for together.
 
-1. **Start the model.** Open `notebooks/kaggle_demo.ipynb` on Kaggle with the
-   `biai-bank-assistant` dataset attached and the accelerator set to **GPU T4**
-   (internet on). Run sections 1–5; section 5 prints the 40-question table.
-2. **Publish it.** Run **section 8**. It installs FastAPI, starts
-   `api_server.py` on the GPU, answers one Banglish question through the
-   endpoint so you can see the served text, opens a Cloudflare quick tunnel, and
-   prints at the end:
-
-   ```text
-   BIAI_API_URL=https://<random-words>.trycloudflare.com
-   BIAI_API_TOKEN=<a token the cell generated for this session>
-   python3 main.py   ← the exact line to run, with both values already filled in
-   ```
-
-   Copy both values **exactly as printed**. The token is not typed by you and it
-   is not from any token-generator website: `api_server.py` compares the
-   `Authorization` header against the token that same cell generated, so any
-   other value is a `401`. The URL lives only while the notebook session runs.
-3. **Run the desktop app against it.** Three commands on every machine; only how
-   you set the two variables differs. Use `python3` (Linux/macOS) or `py -3`
-   (Windows) — never a bare `python`, which on some machines is still Python 2.
-
-   **Linux (bash/zsh)**
-
-   ```bash
-   cd biai_bank_assistant
-   python3 -m pip install -r requirements.txt          # PySide6 only
-   BIAI_API_URL="https://<that-url>" BIAI_API_TOKEN="<printed token>" python3 main.py
-   ```
-
-   **macOS (Terminal — same as Linux, or export the variables first)**
-
-   ```bash
-   cd biai_bank_assistant
-   python3 -m pip install -r requirements.txt
-   export BIAI_API_URL="https://<that-url>"
-   export BIAI_API_TOKEN="<printed token>"
-   python3 main.py
-   ```
-
-   **Windows (PowerShell)**
-
-   ```powershell
-   cd biai_bank_assistant
-   py -3 -m pip install -r requirements.txt            # PySide6 only
-   $env:BIAI_API_URL   = "https://<that-url>"
-   $env:BIAI_API_TOKEN = "<printed token>"
-   py -3 main.py
-   ```
-
-   On Windows Git Bash use the Linux form with `python3`.
-
-4. **Test it — the four checks.**
-
-   | Type this | Expect |
-   |---|---|
-   | `Card er PIN bhule gechi, reset korbo kibhabe?` | the same Banglish text section 8 printed |
-   | `আমার কার্ড হারিয়ে গেছে, এখন কী করব?` | Bangla script, Bangla digits, `৩০০ টাকা` |
-   | `What is today's dollar to taka exchange rate?` | `I don't know, let me connect you to a person.` |
-   | status pill / inspector | `MODEL READY — KAGGLE`, retrieval `dense`, Qwen generator named |
-
-   A `LOCAL FAQ` pill means the token was wrong or the tunnel died: the window
-   says so and keeps answering from the FAQ on the machine, so the demo never
-   becomes a blank box. Re-run section 8 and copy the new values.
-5. **Optional:** set `BIAI_ADAPTER_PATH` to the adapter saved by section 6 before
-   starting section 8 if you want the trained adapter served. The reproducible
-   training command is `python3 train.py --faq data/bank-faq.csv --output
-   /path/to/adapter` — it never opens `data/test-questions.csv`, and it is not
-   required for the numbers above.
-
-
-## Run modes — reference, not the judged path
-
-`python3 main.py` on a machine without `torch`/`sentence-transformers` runs in **lexical smoke-test mode**: the embedding model and the generator are both absent, the UI pill says `SMOKE TEST`, and the inspector names the missing dependency.
-
-Smoke-test mode is grounded and it refuses correctly, but it answers in the FAQ's language: `bank-faq.csv` is English, nothing else may be quoted, so a Bangla question gets the bank's English sentence and the window says so plainly. Requirement 2 is the model's job, not the disk's. On the lexical stack the held-out set scores 30/30 on the FAQ source, 10/10 on the hand-offs, 40/40 on "no echo, complete sentence" — and 20/40 on reply language, which is the honest cost of running without a model.
-
-Set `BIAI_DISABLE_DENSE=1` to force the lexical path even where the models are installed, and `BIAI_GENERATION_MODEL` / `BIAI_EMBEDDING_MODEL` to use others. `BIAI_TRANSLATOR_MODEL` can select another compatible English-to-Bangla seq2seq checkpoint; the default is `SifatAlMukit/finetuned-en-bn-nllb`. `BIAI_MAX_NEW_TOKENS` raises the Qwen answer budget and `BIAI_RENDER_MAX_NEW_TOKENS` raises the translation budget.
-
-## Run the evaluation
-
-```bash
-python3 evaluate.py
-```
-
-The test questions remain evaluation-only. `reports/offline_results.json` records the expected FAQ source, refusal status, language, confidence, and latency for each question.
-
-## Kaggle
-
-`notebooks/kaggle_demo.ipynb` is the reproducible demo and the path that produces the model-stack numbers. A persistent public server is intentionally not required.
-
-1. Upload the **contents** of this folder — not the folder itself — as a Kaggle dataset named `biai-bank-assistant`. The notebook reads `/kaggle/input/biai-bank-assistant/src`, `/data`, and `/requirements-kaggle.txt`, so `src/`, `data/`, `evaluate.py` and `requirements-kaggle.txt` must sit at the top level of the dataset. The notebook asserts this in section 2 rather than failing later.
-2. Open the notebook (`File → New Notebook → Import from local file`, or create a notebook and paste the sections), attach that dataset, and switch the accelerator to **GPU T4** with internet **on** (the weights come from Hugging Face on first run).
-3. Run all cells. Section 5 copies the project into `/kaggle/working` before evaluating, because `/kaggle/input` is read-only and `evaluate.py` writes its report there.
-4. Section 6 is the brief's *optional* extra (further training on public banking vocabulary) and is **not** needed for the numbers above — the language fixes are in the renderer, not in the weights. Section 7 is the *required* comparison against an online model: `BIAI_BASELINE_MODEL` defaults to `gemini-3.5-flash-lite`, because `gemini-2.0-flash` and the 2.5 family are retired. Add `GEMINI_API_KEY` under **Settings → Add-ons and Secrets** in the notebook (free key from [Google AI Studio](https://aistudio.google.com/apikey)); the cell reads it through `UserSecretsClient`, so the key never enters the notebook text, the dataset or git. Section 8 is the *mandatory* desktop-app link and prints the tunnel URL and a generated token.
-
-**The dataset is a copy, so a stale upload runs old code.** For this pass, re-upload:
-
-| File | Why it must be re-uploaded |
-|---|---|
-| `src/bn_render.py` | Value-based number check (`7.50%` = `7.5%`, `10:00 AM` = `10 AM`) so a correct sentence is no longer rejected; the deterministic style pass (Bangla digits, `টাকা`/`taka`, no Banglish hyphens, English service words kept in Banglish and written in Bangla script in Bangla, `প্রতি তিন মাস পর পর`, `নমিনি`, `অ্যালার্ট`); pinned renderings for FAQ 9, 10, 15, 16, 25, 28, 30 in both scripts |
-| `notebooks/kaggle_demo.ipynb`, `notebooks/kaggle.ipynb` | Section 7 baseline moved to `gemini-3.5-flash-lite`; section 8 hardened (generated token, port-in-use guard, uvicorn waited for before the tunnel opens, log-file instead of blocking pipe read, IPv4 edge, a warm-up answer printed through the endpoint) |
-
-Everything else in the dataset is already current. The full set the notebook expects, for anyone starting from an older upload:
-
-| File | Why it must be re-uploaded |
-|---|---|
-| `data/bank-faq.csv` | Restore the **supplied** file: upload the pack's original four columns over the edited copy the dataset still holds. Same for `test-questions.csv` if it was ever touched |
-| `src/normalize.py` | Concept dedup, the wider stopword list, the new রাখা glosses, the echo and wording-reuse gates |
-| `src/models.py` | `FAQEntry` holds only the four supplied columns, so no second answer surface can creep in |
-| `src/retrieval.py` | Concept-based lexical scoring, `is_ambiguous`, and invented-figure rejection |
-| `src/generator.py` | The answer prompt no longer contains the English gloss, and the no-echo instruction |
-| `src/assistant.py` | Entailment veto derived from the retrieval floor, public `answer_vocabulary`, reuse gate wired in |
-| `src/bn_render.py`, `src/__init__.py` | Dedicated English-to-Bangla renderer, verified Banglish romanisation, and import hook |
-| `src/remote.py` | New: the desktop client for a Kaggle-hosted endpoint |
-| `evaluate.py` | Re-checks the delivered answer for echo and truncation and reports both |
-| `api_server.py` | New: FastAPI endpoint that serves the GPU stack |
-| `main.py`, `ui/main_window.py` | Backend selection from `BIAI_API_URL` and an honest status pill for it |
-| `notebooks/kaggle_demo.ipynb`, `notebooks/kaggle.ipynb` | Stages the renderer and uses `SifatAlMukit/finetuned-en-bn-nllb`; prints per-script accuracy |
-| `requirements-kaggle.txt`, `train.py` | Required at the dataset root so the notebook can install dependencies and train/load the adapter |
-
-Section 3 of the notebook fails loudly if the staged `src/` predates these gates, so an accidentally stale upload is a red cell rather than a quietly worse run.
-
-Locally, `python3 kaggle_demo.py` still runs the headless evaluation, and `python3 main.py` opens the desktop interface.
-
-## Connect the Kaggle model to the PySide6 desktop app (mandatory path)
-
-The desktop app and the notebook call the same surface — `answer(question) -> AssistantResult` — so the only decision is *where* that call runs. `BIAI_API_URL` makes that choice in `main.py`: unset, the laptop answers from the local FAQ; set, every question is posted to the GPU host and the laptop pipeline stays as the fallback.
-
-1. In the notebook, run section 8. It installs FastAPI, serves `api_server.py` on the T4, waits until the local `/health` actually answers, opens a Cloudflare quick tunnel on the IPv4 edge and prints a **generated** `BIAI_API_TOKEN`, an `https://…trycloudflare.com` URL and the exact laptop command. Before the tunnel it posts one Banglish question to the endpoint and prints the reply, which is the same text the desktop app will show and the same path section 5 measured. Re-running the cell stops the old server and tunnel first, so a second run cannot leave `address already in use` behind. `BIAI_API_PORT` moves it off a busy port.
-2. On the laptop, start the app against it (copy both values from the cell output):
+## Quick start
 
 ```bash
 cd biai_bank_assistant
-# Linux/macOS — full step-by-step, with the Windows and macOS forms, is step 3 above
-BIAI_API_URL="https://<that-url>" BIAI_API_TOKEN="<printed token>" python3 main.py
+python3 -m pip install -r requirements.txt      # PySide6 only, for the UI
+python3 main.py
 ```
 
-The pill reads `MODEL READY — KAGGLE` and the inspector names the endpoint's retrieval mode and generator, so the chat window is showing the notebook's `kaggle8.json` answers rather than the laptop's English FAQ copy. A wrong or missing token is a 401; a dead tunnel is not an error dialog — the window says the endpoint was unreachable and keeps answering from the FAQ on the machine. Set `BIAI_ADAPTER_PATH` on the laptop only if you also ran section 6 and want the server to serve that adapter.
+On Windows use `py -3` wherever you would type `python3`. Without `torch` the app runs in **SMOKE TEST** mode: it still answers and still refuses correctly, but it replies in the FAQ's own language because there is no model on that machine to rewrite it — the honest cost of running without weights is 20/40 on reply language, with everything else unchanged. The judged run is the GPU one in `notebooks/kaggle.ipynb`, whose numbers this file reports.
 
-**Can this be the "working demo" link in the email?** Not as a web URL: a PySide6 window is a desktop binary, and the tunnel is a Kaggle session that dies with the notebook, so it is a demo path and not a hostable link. Send the Loom recording as the demo link, and show section 8 plus this command inside it, with the desktop app answering a Banglish question from the GPU. If a clickable link is required, the honest options are a Colab/Binder notebook link that runs sections 1–5, or the hosted demo of the API only (`api_server.py` behind a real host), never a customer-data path.
+| Variable | Effect |
+|---|---|
+| `BIAI_DISABLE_DENSE=1` | force the lexical-only retriever, no embedding model needed |
+| `BIAI_GENERATION_MODEL` / `BIAI_EMBEDDING_MODEL` | swap the generator or the embedder |
+| `BIAI_TRANSLATOR_MODEL` | swap the English→Bangla checkpoint (default `SifatAlMukit/finetuned-en-bn-nllb`) |
+| `BIAI_MAX_NEW_TOKENS` / `BIAI_RENDER_MAX_NEW_TOKENS` | raise the answer / translation budgets |
+| `BIAI_ADAPTER_PATH` | load the adapter produced by `train.py` |
+| `BIAI_API_URL` + `BIAI_API_TOKEN` | drive the UI against a GPU endpoint instead of this machine's copy; the app says which backend answered |
 
-Three things worth knowing before you use it:
+### Try these four questions
 
-- Kaggle sessions are not servers. The tunnel lives only as long as the notebook is running, and Kaggle recycles idle sessions; this is a demo and evaluation path, not production hosting. For a laptop-only setup instead, install `requirements-kaggle.txt` locally with a GPU and leave `BIAI_API_URL` unset.
-- Every gate runs on the host that produced the reply, so what the tunnel returns is already checked text. The chat line identifies the Qwen answer writer and the translation renderer; when a generated sentence fails a gate, the rejected draft stays visible under the bank's sentence.
-- `api_server.py` loads `data/bank-faq.csv` from its own directory — the only data file it reads. Serve it from a host with a **loaded generator**, or every remote reply comes back in the FAQ's English.
+| Type | You should see |
+|---|---|
+| `What is today's dollar to taka exchange rate?` | `I don't know, let me connect you to a person.` |
+| `আমার কার্ড হারিয়ে গেছে, এখন কী করব?` | Bangla script, Bangla digits, `… ৩০০ টাকা …` |
+| `Card er PIN bhule gechi, reset korbo kibhabe?` | Banglish, Latin digits, no stray hyphens |
+| `Personal loan pete hole ki ki lagbe?` | the eligibility list, with `minimum` and `monthly income` kept in English |
+
+## How I tested it
+
+**Regression tests** — `python3 -m unittest tests.test_regression -v`, 11 tests, no GPU and no weights required:
+
+- `test_source_and_refusal_regression` — all 40 held-out questions: the answered/hand-off decision, and the expected `source_id` for every answer. This is the test that catches a retrieval regression.
+- `test_supplied_files_are_untouched` — SHA-256 of `data/bank-faq.csv` and `data/test-questions.csv` against the pack's digests, plus row counts (30 entries, 40 questions). Editing the factual source fails the suite.
+- `test_language_and_refusal_contract`, `test_grounding_and_format_gates` — script detection, the refusal lines in all three scripts, `preserves_key_facts` on a fabricated figure, and the format gates on a real Bangla reply.
+- `test_generator_prompt_has_script_examples` — the style examples are actually inside the Bangla and Banglish prompts.
+- `test_source_render_fallbacks_cover_kaggle6_misses` — pinned renderings exist for the entries that once came back in English, each ends in sentence punctuation, and no Bangla script leaks into a Banglish line.
+- `test_banglish_keeps_requested_english_banking_terms`, `test_banglish_phrase_layer_uses_customer_service_register` — `interest rate`, `reducing balance`, `processing fee`, `working days-er moddhe`, `cheque book-er jonno` survive romanisation.
+- `test_style_answer_applies_customer_register` — Bangla gets Bengali digits and `টাকা`, `এন আই ডি` and `আপডেইট`; Banglish keeps Latin digits, drops `BDT` and hyphens, keeps `minimum`.
+- `test_remote_payload_round_trip` — a served JSON payload rebuilds into the same `AssistantResult` the local pipeline produces.
+- `test_training_script_does_not_reference_held_out_questions` — static check that `train.py` never opens `test-questions.csv` and names only the disclosed public corpora.
+
+**Evaluation run** — `python3 evaluate.py` answers all 40 questions end to end and writes `reports/offline_results.json`. I read that file line by line rather than trusting the aggregate: 30/30 on the FAQ source, 10/10 on the hand-offs, language and latency per script, and for each row the `support_type`, the `answer_form` (model or fallback) and `rendered_by`. The English-leak cases in the run before this one were found exactly this way — a 27/30 headline still hides a sentence-level bug.
+
+**Manual testing** — `python3 main.py`, then by hand: all three scripts plus a mixed one, a hand-off question, a question citing a figure the FAQ contradicts, and the fallback path with the endpoint unreachable. Then `python3 api_server.py` locally with `curl` against `/health` and `/answer`, with and without the bearer token, to confirm a wrong token surfaces as a `401` rather than a silent fallback, and that the pill switches to `MODEL READY — KAGGLE` when the URL is right. On Kaggle, section 3 of the notebook re-runs the renderer, verifier and transliterator assertions against the staged copy, and section 5 prints the 40-question table that `kaggle8.json` records.
+
+**What manual testing caught that the tests did not** — an unreadable question colour in the chat window, hyphens left inside Banglish words, `ত্রৈমাসিকে` reading as textbook rather than customer-facing Bangla, and a pile of errors when the serving cell was run a second time. Each one is now either an assertion above, a rule in `style_answer()`, or a guard in the notebook.
+
+## Files changed in this pass
+
+| File | Change |
+|---|---|
+| `src/bn_render.py` | numbers compared as values (`7.50%` = `7.5%`, `10:00 AM` = `10 AM`), so a correct Bangla sentence stopped being rejected; the `style_answer()` register pass; pinned renderings for the entries the run before this one served in English |
+| `ui/main_window.py`, `ui/theme.py` | chat visibility: questions and answers now render as dark role bubbles on the cream card instead of pale blue text, the inspector labels are no longer indigo on lilac, chat and composer type is larger, and the placeholder text is readable. Same palette, same layout, same borders and hard shadows |
+| `tests/test_regression.py` | new `test_style_answer_applies_customer_register`, covering both scripts' register rules |
+| `notebooks/kaggle.ipynb` | the notebook to run; section 7's baseline is `gemini-3.5-flash-lite`, and section 8's serving cell is hardened (generated token, port-in-use guard, waits on `/health` before opening the tunnel, reads log files instead of a blocking pipe, IPv4 edge, one warm-up answer printed through the endpoint) |
+| `README.md`, `ONE_PAGE_NOTE.md` | this file, and the notebook name corrected everywhere it was quoted |
+
+**What to re-upload to the `biai-bank-assistant` dataset:** the whole `src/` folder (not just `src/bn_render.py`, because the notebook stages it as a unit), `ui/main_window.py`, `ui/theme.py`, `tests/test_regression.py`, `notebooks/kaggle.ipynb`, and this `README.md`. `data/`, `evaluate.py`, `api_server.py` and `requirements-kaggle.txt` must stay at the dataset's top level — that is where the notebook reads them from. Section 3 of the notebook fails loudly when the staged `src/` predates these gates, so a stale upload shows up as a red cell rather than a quietly worse score.
 
 ## Data rule
 
-Facts come **only** from the BIAI-supplied `data/bank-faq.csv`, stored byte-identical to the pack. The serving path opens that FAQ as its only factual source; `training_data/` is language-only supervision for `train.py`, never a response cache. There is no side file of prepared answers: the renderer's small fallback table is code-level wording derived from specific FAQ entries and adds no facts. The 40-question `data/test-questions.csv`, also byte-identical, is held out for testing and is never used for training or tuning the model.
+Facts come only from the BIAI-supplied `data/bank-faq.csv`, stored byte-identical to the pack. `training_data/` is language-only supervision for `train.py`, never a response cache, and there is no side file of prepared answers: the renderer's small fallback table is code-level wording derived from specific FAQ entries and adds no facts.
 
-Training the model on public language data is allowed and is what the brief itself invites — *"Extra (optional): train the small model further on banking words or Banglish, and show if it got better."* — and was confirmed by the BIAI Hiring Team on 3 November 2026, provided no real bank or customer data is used and the source is disclosed. That is the legal route to better Bangla and Banglish output: language skill goes into the **model weights**, never into a second file of answers. `train.py` combines the FAQ with licensed language/register corpora; the held-out questions are never opened.
+Further training on public banking and Banglish vocabulary is allowed — the brief invites it ("Extra (optional): train the small model further on banking words or Banglish, and show if it got better"), confirmed by the BIAI Hiring Team on 3 November 2026 — provided no real bank or customer data is used and the source is disclosed. Language skill goes into the model weights, never into a second file of answers.
 
 | Dataset | Source | License | Used for |
 |---|---|---|---|
 | `istiaqfuad/bangla-english-banglish-pairs` **(used by training)** | [HF](https://huggingface.co/datasets/istiaqfuad/bangla-english-banglish-pairs), derived from `Helsinki-NLP/opus-100` | CC-BY-4.0 | Up to 1,200 filtered public banking-language pairs for the Qwen LoRA language adapter |
 | `learn-abc/banking14-intents-en-bn-banglish` **(used by training)** | [HF](https://huggingface.co/datasets/learn-abc/banking14-intents-en-bn-banglish) | MIT | Synthetic banking-language register examples from the train split |
 | `subhajitmahata84/banglabridge-instructions` **(used by training)** | [HF](https://huggingface.co/datasets/subhajitmahata84/banglabridge-instructions) | CC-BY-4.0 | Synthetic Banglish instruction/output style examples |
-| `istiaqfuad/triBne-e5-small` **(used as the retriever)** | [HF](https://huggingface.co/istiaqfuad/triBne-e5-small) | MIT | Multilingual embeddings. This third-party retriever was itself fine-tuned on public CC-BY parallel pairs; it supplies language similarity, not bank facts. |
-| `SifatAlMukit/finetuned-en-bn-nllb` **(used as the renderer)** | [HF](https://huggingface.co/SifatAlMukit/finetuned-en-bn-nllb) | MIT | Conversational English↔Bengali NLLB checkpoint fine-tuned on Tatoeba pairs; it supplies wording only, never bank facts. Banglish is romanised from its verified Bangla output. |
+| `istiaqfuad/triBne-e5-small` **(used as the retriever)** | [HF](https://huggingface.co/istiaqfuad/triBne-e5-small) | MIT | Multilingual embeddings, itself fine-tuned on public CC-BY parallel pairs. Language similarity, not bank facts. |
+| `SifatAlMukit/finetuned-en-bn-nllb` **(used as the renderer)** | [HF](https://huggingface.co/SifatAlMukit/finetuned-en-bn-nllb) | MIT | Conversational English↔Bengali NLLB checkpoint; wording only, never facts. Banglish is romanised from its verified Bangla output. |
 | `ShayonSarker/Bengali-to-Banglish-Dataset` **(not used in the shipped run)** | [HF](https://huggingface.co/datasets/ShayonSarker/Bengali-to-Banglish-Dataset) | MIT | Considered for a future Banglish lexicon |
 | Mendeley Data `5h5vkhm9n5` **(not used in the shipped run)** | [Mendeley](https://data.mendeley.com/datasets/5h5vkhm9n5) | CC-BY-4.0 | Considered for future Banglish→English pairs |
 | Vashantor **(used by training)** | [Mendeley](https://data.mendeley.com/datasets/bj5jgk878b/2) | CC-BY-4.0 | Train-only Bangla/Banglish/English dialect pairs copied to `training_data/vashantor_train.jsonl` |
 
-Models: `Qwen/Qwen3-1.7B`, Apache-2.0, 2.03B parameters (~1.2–1.5 GB at 4-bit); `SifatAlMukit/finetuned-en-bn-nllb`, MIT, about 0.6B parameters, fine-tuned for conversational English↔Bengali translation; and the ~118M-parameter `triBne-e5-small` retriever. All fit on a Kaggle T4.
+Models: `Qwen/Qwen3-1.7B`, Apache-2.0, 2.03B parameters (~1.2–1.5 GB at 4-bit); `SifatAlMukit/finetuned-en-bn-nllb`, MIT, ~0.6B parameters; and the ~118M-parameter `triBne-e5-small` retriever. All three fit on a Kaggle T4.
 
-Two local archives were **rejected and never used**: the BGHL Bangla grammar QA set (domain mismatch, no stated licence) and the multilingual religious hate-speech set (contains scraped public comments with author links and unsafe/off-domain content). The local seven-regional-dialect workbook was inspected but not added because the archive contains no licence metadata; Vashantor provides the same useful Bangla/Banglish dialect supervision with a documented CC-BY-4.0 licence.
+Two local archives were rejected and never used: the BGHL Bangla grammar QA set (domain mismatch, no stated licence) and the multilingual religious hate-speech set (scraped public comments with author links, unsafe and off-domain). The seven-regional-dialect workbook was inspected but not added, because its archive carries no licence metadata; Vashantor provides the same dialect supervision with a documented CC-BY-4.0 licence.
 
 Nothing from any of these sources may enter an answer. They supply **language**, the FAQ supplies **facts**.
-
-## Known limitation: the out-of-scope guards
-
-`UNCOVERED_CONCEPTS` in `src/assistant.py` lists concepts with zero coverage in the supplied FAQ (commodity and market prices, securities, foreign exchange, crypto, immigration, named staff, branch locations, third-party account lookups). The list is filtered at load time against the FAQ's own vocabulary, so it can never refuse a topic the corpus actually covers. It was compiled by reading the FAQ, not the answer key — but it did influence hand-off behaviour on the held-out set, and that is disclosed here rather than hidden.
-

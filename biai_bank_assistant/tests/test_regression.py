@@ -96,6 +96,23 @@ class SanityTests(unittest.TestCase):
             else:
                 self.assertRegex(answer, r'[\u0980-\u09FF]')
 
+    def test_style_answer_applies_customer_register(self):
+        bangla = bn_render.style_answer("ফি BDT 300, NID এবং একটা update লাগবে।", "bn")
+        self.assertIn("৩০০ টাকা", bangla)
+        self.assertIn("এন আই ডি", bangla)
+        self.assertIn("আপডেইট", bangla)
+        self.assertNotIn("BDT", bangla)
+        self.assertNotRegex(bangla, r"\b(?:NID|update)\b")
+
+        banglish = bn_render.style_answer(
+            "Processing fee loan amount-er 1%, monthly income kompakhe BDT 30,000.", "banglish")
+        self.assertIn("30,000 taka", banglish)
+        self.assertIn("minimum", banglish)
+        self.assertNotIn("-", banglish)
+        self.assertNotIn("BDT", banglish)
+        self.assertRegex(banglish, r"\d")   # Latin digits stay Latin in Banglish
+        self.assertRegex(banglish, r"[A-Za-z]")
+
     def test_banglish_keeps_requested_english_banking_terms(self):
         rendered = bn_render.bn_to_banglish(
             'সুদের হার প্রতি বছরে 12% হ্রাসমান স্থিতির উপর। '

@@ -359,7 +359,7 @@ _BN_PHRASES = [
 ]
 
 _BANGLISH_PHRASES = [
-    ('kompakhe', 'minimum'), ('compact hishebe', 'minimum'),
+    ('kompakhe', 'minimum'), ('compacthe', 'minimum'), ('compact hishebe', 'minimum'),
 ]
 
 _AMOUNT = r'\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?'
