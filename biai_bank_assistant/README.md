@@ -34,7 +34,7 @@ There is nothing to install on the laptop except PySide6. **A laptop CPU cannot 
    python3 main.py   ← the exact line to run, with both values already filled in
    ```
 
-   Copy both values **exactly as printed**. The token is not typed by you and it is not from any token-generator website: `api_server.py` compares the `Authorization` header against the token that same cell generated, so any other value is a `401`. The URL lives only while the notebook session runs.
+   Copy both values **exactly as printed**. The token is not typed by you and it is not from any token-generator website: `api_server.py` compares the `Authorization` header against the token that same cell generated, so any other value is a `401`. The URL lives only while the notebook session runs, and the next run gets a different hostname — **section 8.1** below is for a link that does not change.
 3. **Run the desktop app against it.** Three commands on every machine; only how you set the two variables differs. Use `python3` (Linux/macOS) or `py -3` (Windows) — never a bare `python`, which on some machines is still Python 2.
 
    **Linux (bash/zsh)**
@@ -80,6 +80,19 @@ There is nothing to install on the laptop except PySide6. **A laptop CPU cannot 
    | status pill / inspector | `MODEL READY — KAGGLE`, retrieval `dense`, Qwen generator named |
 
    A `LOCAL FAQ` pill means the token was wrong or the tunnel died: the window says so and keeps answering from the FAQ on the machine, so the demo never becomes a blank box. Re-run section 8 and copy the new values.
+
+### A link that survives between sessions (notebook section 8.1)
+
+The `trycloudflare.com` address above is generated per run, so the laptop command is different every time. **ngrok's free tier reserves one permanent domain to your account** — `https://<your-name>-ngrok-free.app` — and notebook **section 8.1** publishes the same endpoint through it, so the command you type on the laptop stops changing.
+
+1. Make a free ngrok account and open **<https://dashboard.ngrok.com/get-started/your-authtoken>**. That page shows two things you need: the **authtoken**, and the account's **Free Domain**.
+2. In the Kaggle notebook's right-hand panel, **Add-ons and Secrets → New Secret**, twice:
+   - `NGROK_AUTHTOKEN` = the authtoken from step 1;
+   - `BIAI_API_TOKEN` = any long string you invent once — `python3 -c "import secrets;print(secrets.token_urlsafe(18))"`. This is the part that makes the *token* half of the command permanent. The cell never prints it, so it cannot end up in a shared notebook's output.
+3. Keep **Internet** on and run section 8.1. It reuses the server section 8 started (or starts its own), opens the tunnel, reads `/health` through the public URL to prove JSON comes back, and prints the laptop command with the permanent hostname already filled in.
+4. Type that command on the laptop. From then on it is the same two values every session — only `Run All` in the notebook changes.
+
+What "survives" honestly means: the **address** is permanent because it belongs to the ngrok account; the **server** is not, because Kaggle has no always-on container and a session ends when you stop it or after roughly 9 hours of GPU time. While the notebook is off, the app falls back to the FAQ on the laptop and the pill reads `LOCAL FAQ` — which is the designed behaviour, not an error. Free ngrok domains show an interstitial page to browsers, so `src/remote.py` sends `ngrok-skip-browser-warning: 1` on both of its calls and the app reads JSON, not that page.
 
 ## The Kaggle dataset
 
@@ -181,7 +194,7 @@ The same four questions from step 4 still work here, and the FAQ source, the han
 
 ## How I tested it
 
-**Regression tests** — `python3 -m unittest tests.test_regression -v`, 11 tests, no GPU and no weights required:
+**Regression tests** — `python3 -m unittest tests.test_regression -v`, 12 tests, no GPU and no weights required:
 
 - `test_source_and_refusal_regression` — all 40 held-out questions: the answered/hand-off decision, and the expected `source_id` for every answer. This is the test that catches a retrieval regression.
 - `test_supplied_files_are_untouched` — SHA-256 of `data/bank-faq.csv` and `data/test-questions.csv` against the pack's digests, plus row counts (30 entries, 40 questions). Editing the factual source fails the suite.
@@ -191,6 +204,7 @@ The same four questions from step 4 still work here, and the FAQ source, the han
 - `test_banglish_keeps_requested_english_banking_terms`, `test_banglish_phrase_layer_uses_customer_service_register` — `interest rate`, `reducing balance`, `processing fee`, `working days-er moddhe`, `cheque book-er jonno` survive romanisation.
 - `test_style_answer_applies_customer_register` — Bangla gets Bengali digits and `টাকা`, `এন আই ডি` and `আপডেইট`; Banglish keeps Latin digits, drops `BDT` and hyphens, keeps `minimum`.
 - `test_remote_payload_round_trip` — a served JSON payload rebuilds into the same `AssistantResult` the local pipeline produces.
+- `test_remote_headers_skip_the_ngrok_interstitial` — the endpoint calls carry `ngrok-skip-browser-warning`, so a free ngrok domain answers JSON instead of its HTML warning page, and the bearer token is only sent when one exists.
 - `test_training_script_does_not_reference_held_out_questions` — static check that `train.py` never opens `test-questions.csv` and names only the disclosed public corpora.
 
 **Evaluation run** — `python3 evaluate.py` answers all 40 questions end to end and writes `reports/offline_results.json`. I read that file line by line rather than trusting the aggregate: 30/30 on the FAQ source, 10/10 on the hand-offs, language and latency per script, and for each row the `support_type`, the `answer_form` (model or fallback) and `rendered_by`. The English-leak cases in the run before this one were found exactly this way — a 27/30 headline still hides a sentence-level bug.

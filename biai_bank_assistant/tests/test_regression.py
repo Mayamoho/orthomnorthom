@@ -144,6 +144,13 @@ class SystemTests(unittest.TestCase):
         self.assertEqual(round_trip.source_id, result.source_id)
         self.assertEqual(round_trip.answer, result.answer)
 
+    def test_remote_headers_skip_the_ngrok_interstitial(self):
+        """A free ngrok domain otherwise answers an API call with an HTML page."""
+        headers = RemoteAssistant("https://abc-ngrok-free.app", api_token="t0")._headers()
+        self.assertEqual(headers["ngrok-skip-browser-warning"], "1")
+        self.assertEqual(headers["Authorization"], "Bearer t0")
+        self.assertNotIn("Authorization", RemoteAssistant("https://x", api_token="")._headers())
+
     def test_training_script_does_not_reference_held_out_questions(self):
         source = (ROOT / "train.py").read_text(encoding="utf-8")
         self.assertNotIn("load_test_questions", source)

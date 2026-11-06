@@ -45,7 +45,7 @@ class RemoteAssistant:
         request = urllib.request.Request(
             f"{self.base_url}/answer",
             data=json.dumps(body).encode("utf-8"),
-            headers={"Content-Type": "application/json", **({"Authorization": f"Bearer {self.api_token}"} if self.api_token else {})},
+            headers={"Content-Type": "application/json", **self._headers()},
             method="POST",
         )
         try:
@@ -55,6 +55,13 @@ class RemoteAssistant:
             raise RemoteError(f"endpoint replied {exc.code}") from exc
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
             raise RemoteError(str(exc)) from exc
+
+    def _headers(self) -> dict:
+        """Auth, plus the header a free ngrok domain needs to answer JSON, not its HTML warning page."""
+        headers = {"ngrok-skip-browser-warning": "1"}
+        if self.api_token:
+            headers["Authorization"] = f"Bearer {self.api_token}"
+        return headers
 
     def _to_result(self, payload: dict, question: str) -> AssistantResult:
         if payload.get("status") not in {"answered", "handoff"}:
@@ -71,7 +78,9 @@ class RemoteAssistant:
     def health(self) -> dict:
         """Which stack the endpoint is actually running, so the UI can be honest."""
         try:
-            with urllib.request.urlopen(f"{self.base_url}/health", timeout=self.timeout) as response:
+            with urllib.request.urlopen(
+                    urllib.request.Request(f"{self.base_url}/health", headers=self._headers()),
+                    timeout=self.timeout) as response:
                 return json.loads(response.read().decode("utf-8"))
         except Exception as exc:
             return {"online": False, "error": str(exc)}
